@@ -12,44 +12,11 @@ const WorkshopBatch = require('../models/WorkshopBatch');
 const User     = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
 const { sendEmail, workshopApprovedTemplate, loginCredentialsTemplate } = require('../utils/emailUtils');
+const { resolveRecordingPlayback } = require('../utils/recordingStorage');
+const { rejectPastDate, rejectPastDateTime } = require('../utils/dateTimeValidation');
 
 const router = express.Router();
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
-
-const RECORDINGS_DIR = path.join(__dirname, '..', '..', '..', 'lms-recordings');
-const BASE_RECORDING_URL = (process.env.PUBLIC_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
-
-function resolveRecordingPlayback(recording) {
-  let relPath = '';
-  let url = recording.url || '';
-
-  if (url) {
-    relPath = url.replace(/^https?:\/\/[^\/]+/, '').replace(/^\/+/, '').replace(/^recordings\//, '').replace(/^out\//, '').replace(/^\/+/, '');
-  }
-  if (!relPath && recording.filename) {
-    relPath = recording.filename.replace(/^\/out\//, '').replace(/^\/+/, '');
-  }
-  if (!relPath && recording.roomName) {
-    const roomDir = path.join(RECORDINGS_DIR, recording.roomName);
-    if (fs.existsSync(roomDir) && fs.statSync(roomDir).isDirectory()) {
-      const mp4s = fs.readdirSync(roomDir).filter(f => f.endsWith('.mp4'));
-      if (mp4s.length > 0) {
-        relPath = `${recording.roomName}/${mp4s[0]}`;
-      }
-    }
-  }
-  if (relPath) {
-    url = `${BASE_RECORDING_URL}/recordings/${relPath}`;
-  }
-
-  let playable = false;
-  if (relPath) {
-    const filePath = path.join(RECORDINGS_DIR, relPath);
-    playable = fs.existsSync(filePath) && fs.statSync(filePath).size > 0;
-  }
-
-  return { url, playable, relPath };
-}
 
 // ── IMPORTANT: All named/static routes MUST come before /:id ──────────────────
 
@@ -814,9 +781,13 @@ router.post('/batches', protect, authorize('admin'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'Select at least one trainee.' });
 
     // Date validation
+    const dateCheck = rejectPastDate(startDate, 'Batch start date');
+    if (!dateCheck.ok) return res.status(400).json({ success: false, message: dateCheck.message });
+    if (startTime) {
+      const dtCheck = rejectPastDateTime(startDate, startTime, 'Batch start date/time');
+      if (!dtCheck.ok) return res.status(400).json({ success: false, message: dtCheck.message });
+    }
     const sd = new Date(startDate);
-    if (isNaN(sd.getTime())) return res.status(400).json({ success: false, message: 'Invalid start date.' });
-    if (sd < new Date()) return res.status(400).json({ success: false, message: 'Batch start date cannot be in the past.' });
     if (endDate) {
       const ed = new Date(endDate);
       if (isNaN(ed.getTime())) return res.status(400).json({ success: false, message: 'Invalid end date.' });
@@ -967,9 +938,12 @@ router.put('/batches/:batchId', protect, authorize('admin'), async (req, res) =>
        return res.status(400).json({ success: false, message: 'End date cannot be before start date.' });
 
     if (startDate) {
-      const sd = new Date(startDate);
-      if (isNaN(sd.getTime())) return res.status(400).json({ success: false, message: 'Invalid start date.' });
-      if (sd < new Date()) return res.status(400).json({ success: false, message: 'Batch start date cannot be in the past.' });
+      const dateCheck = rejectPastDate(startDate, 'Batch start date');
+      if (!dateCheck.ok) return res.status(400).json({ success: false, message: dateCheck.message });
+      if (startTime) {
+        const dtCheck = rejectPastDateTime(startDate, startTime, 'Batch start date/time');
+        if (!dtCheck.ok) return res.status(400).json({ success: false, message: dtCheck.message });
+      }
     }
 
     if (startTime) {
@@ -1040,12 +1014,8 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
     if (isNaN(resolvedDate.getTime())) {
       return res.status(400).json({ success: false, message: 'Invalid date.' });
     }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dateOnly = new Date(resolvedDate.getFullYear(), resolvedDate.getMonth(), resolvedDate.getDate());
-    if (dateOnly < today) {
-      return res.status(400).json({ success: false, message: 'Workshop date cannot be in the past.' });
-    }
+    const pastCheck = rejectPastDateTime(date, req.body.time, 'Workshop date/time');
+    if (!pastCheck.ok) return res.status(400).json({ success: false, message: pastCheck.message });
 
     let resolvedTrainerId = req.body.trainerId || req.user._id;
 
@@ -1158,12 +1128,8 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
       if (isNaN(resolvedDate.getTime())) {
         return res.status(400).json({ success: false, message: 'Invalid date.' });
       }
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dateOnly = new Date(resolvedDate.getFullYear(), resolvedDate.getMonth(), resolvedDate.getDate());
-      if (dateOnly < today) {
-        return res.status(400).json({ success: false, message: 'Workshop date cannot be in the past.' });
-      }
+      const pastCheck = rejectPastDateTime(updates.date, updates.time, 'Workshop date/time');
+      if (!pastCheck.ok) return res.status(400).json({ success: false, message: pastCheck.message });
     }
 
     if (updates.status === 'Published') { updates.published = true; updates.registrationOpen = true; }

@@ -33,7 +33,7 @@ import {
   selectSaveStatus,
   selectSaveError,
 } from '../../features/admin/adminSessionsSlice';
-import { toLocalInput, fromLocalInput, minDateTime } from '../../utils/dateTime';
+import { toLocalInput, fromLocalInput, minDateTime, isPastDateTime } from '../../utils/dateTime';
 
 const SC = { scheduled: '#2f6f9b', live: '#e12e2a', completed: '#16a05f', cancelled: '#657691' };
 const STATUSES = ['scheduled', 'live', 'completed', 'cancelled'];
@@ -214,9 +214,7 @@ export default function AdminSessions() {
     if (!f.batchId)      return setFormError('Please choose a batch.');
     if (!f.scheduledAt)  return setFormError('Please pick a date & time.');
 
-    const scheduledDate = new Date(f.scheduledAt + ':00');
-    if (isNaN(scheduledDate.getTime())) return setFormError('Invalid date/time.');
-    if (scheduledDate < new Date()) return setFormError('Session date and time cannot be in the past.');
+    if (isPastDateTime(f.scheduledAt)) return setFormError('Session date and time cannot be in the past.');
 
     const payload = {
       title: f.title.trim(),

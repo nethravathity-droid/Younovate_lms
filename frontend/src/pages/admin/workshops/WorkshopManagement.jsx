@@ -18,6 +18,7 @@ import {
   normalizeWorkshopStatus,
   formatDateTime,
 } from './workshopMockData';
+import { isPastDateTime, todayDateInput, nowTimeInput } from '../../../utils/dateTime';
 
 const S = {
   page:    { padding: '20px 28px', fontFamily: 'Public Sans, system-ui, sans-serif', background: '#F1F5F9', minHeight: '100vh' },
@@ -97,10 +98,7 @@ function WorkshopForm({ initial, onClose, onSave, saving }) {
     if (!form.title.trim()) { alert('Workshop title is required'); return; }
     if (!form.date) { alert('Workshop date is required'); return; }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selected = new Date(form.date + 'T' + (form.time || '00:00'));
-    if (selected < today) {
+    if (isPastDateTime(form.date, form.time || '00:00')) {
       alert('Workshop date/time cannot be in the past.');
       return;
     }
@@ -176,7 +174,7 @@ function WorkshopForm({ initial, onClose, onSave, saving }) {
             <input style={S.input} type="date" value={form.date} onChange={e => set('date', e.target.value)} min={new Date().toISOString().split('T')[0]} />
           </Field>
           <Field label="Time">
-            <input style={S.input} type="time" value={form.time} onChange={e => set('time', e.target.value)} />
+            <input style={S.input} type="time" value={form.time} onChange={e => set('time', e.target.value)} min={form.date === todayDateInput() ? nowTimeInput() : ''} />
           </Field>
         </div>
         <div style={S.grid2}>
@@ -377,6 +375,7 @@ export default function WorkshopManagement() {
     const initial = editWorkshop ? {
       ...editWorkshop,
       date: editWorkshop.date ? new Date(editWorkshop.date).toISOString().split('T')[0] : '',
+      time: editWorkshop.time || '10:00',
       feeType: editWorkshop.isFree ? 'Free' : 'Paid',
       trainerName: editWorkshop.trainerName || '',
       maxSeats: editWorkshop.maxSeats != null ? String(editWorkshop.maxSeats) : '',

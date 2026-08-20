@@ -84,10 +84,23 @@ export default function LiveWorkshop() {
       setRecording({ status: 'recording', loading: false, error: '' });
     } else if (rs === 'processing') {
       setRecording({ status: 'processing', loading: false, error: '' });
+    } else if (rs === 'failed') {
+      setRecording({ status: 'none', loading: false, error: 'Recording processing failed. Please try again.' });
     } else if (rs === 'available' || rs === 'none' || !rs) {
-      setRecording(r => ({ ...r, status: 'none', loading: false }));
+      setRecording({ status: 'none', loading: false, error: '' });
     }
   }, [workshopSession?.recordingStatus, workshopSession?._id]);
+
+  // Poll while a recording is finalizing
+  useEffect(() => {
+    if (recording.status !== 'processing' || !sessionId) return undefined;
+    const timer = setInterval(() => dispatch(fetchWorkshopSessions()), 3000);
+    const timeout = setTimeout(() => clearInterval(timer), 90000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(timeout);
+    };
+  }, [recording.status, sessionId, dispatch]);
 
   const handleSelect = (id) => {
     dispatch(setSelectedWorkshop(id));
@@ -153,12 +166,16 @@ export default function LiveWorkshop() {
 
    const handleRecordingStop = async () => {
     if (!sessionId) return;
-    setRecording(r => ({ ...r, loading: true, error: '' }));
+    setRecording({ status: 'processing', loading: true, error: '' });
     try {
-      await axios.post(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080'}/api/workshop-sessions/${sessionId}/recording/stop`, {}, {
+      const res = await axios.post(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080'}/api/workshop-sessions/${sessionId}/recording/stop`, {}, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      setRecording({ status: 'processing', loading: false, error: '' });
+      setRecording({
+        status: 'processing',
+        loading: false,
+        error: '',
+      });
       dispatch(fetchWorkshopSessions());
     } catch (err) {
       console.error('Failed to stop recording:', err);

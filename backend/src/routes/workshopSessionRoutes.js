@@ -13,6 +13,7 @@ const { protect, authorize } = require('../middleware/auth');
 const { generateLiveKitToken, roomNameFor, LIVEKIT_URL, startRecording, stopRecording, roomService } = require('../services/livekitService');
 const { classifyAttendance, finalizeAttendanceOnEnd, finalizeWorkshopAttendanceOnEnd } = require('../utils/attendanceUtils');
 const { reconcileRecordingByEgressId } = require('../utils/recordingStorage');
+const { rejectPastDateTime } = require('../utils/dateTimeValidation');
 const { emitToRole, emitToSession } = require('../services/socketService');
 
 const router    = express.Router();
@@ -85,16 +86,8 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
     if (!scheduledAt)
       return res.status(400).json({ success: false, message: 'scheduledAt is required' });
 
-    const scheduledDate = new Date(scheduledAt);
-    if (isNaN(scheduledDate.getTime())) {
-      return res.status(400).json({ success: false, message: 'Invalid date/time.' });
-    }
-    const now = new Date();
-    const scheduledLocal = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate(), scheduledDate.getHours(), scheduledDate.getMinutes());
-    const nowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
-    if (scheduledLocal < nowLocal) {
-      return res.status(400).json({ success: false, message: 'Session date/time cannot be in the past.' });
-    }
+    const pastCheck = rejectPastDateTime(scheduledAt, null, 'Session date/time');
+    if (!pastCheck.ok) return res.status(400).json({ success: false, message: pastCheck.message });
 
     const batch = await WorkshopBatch.findById(workshopBatchId)
       .populate('workshopId', 'title')
@@ -165,16 +158,8 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
 
     if (update.scheduledAt) {
-      const sd = new Date(update.scheduledAt);
-      if (isNaN(sd.getTime())) {
-        return res.status(400).json({ success: false, message: 'Invalid date/time.' });
-      }
-      const now = new Date();
-      const scheduledLocal = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate(), sd.getHours(), sd.getMinutes());
-      const nowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
-      if (scheduledLocal < nowLocal) {
-        return res.status(400).json({ success: false, message: 'Session date/time cannot be in the past.' });
-      }
+      const pastCheck = rejectPastDateTime(update.scheduledAt, null, 'Session date/time');
+      if (!pastCheck.ok) return res.status(400).json({ success: false, message: pastCheck.message });
     }
 
     const session = await Session.findOneAndUpdate(
@@ -227,12 +212,13 @@ router.post('/:id/start', protect, authorize('trainer'), async (req, res) => {
     const scheduledMs = new Date(session.scheduledAt).getTime();
     const sessionEndMs = scheduledMs + (session.durationMinutes || 60) * 60000;
 
-    // Block if current time is before scheduled start
-    if (now < scheduledMs) {
-      const minsUntilStart = Math.ceil((scheduledMs - now) / 60000);
+    // Block if current time is before the join window opens
+    const joinableFromMs = scheduledMs - (session.joinBeforeMinutes || 0) * 60000;
+    if (now < joinableFromMs) {
+      const minsUntilStart = Math.ceil((joinableFromMs - now) / 60000);
       return res.status(409).json({
         success: false,
-        message: `Session cannot start yet. It is scheduled to begin in approximately ${minsUntilStart} minute(s).`,
+        message: `Session cannot start yet. It opens in approximately ${minsUntilStart} minute(s).`,
         status: 'scheduled',
         scheduledAt: session.scheduledAt,
       });
@@ -333,10 +319,10 @@ router.post('/:id/end', protect, authorize('trainer'), async (req, res) => {
     let durationSeconds = 0;
 
     // Stop any active recording
+    let reconcileEgressId = session.egressId;
     try {
       if (session.egressId) {
         await stopRecording(session.egressId);
-        const Recording = require('../models/Recording');
         const existingRecording = await Recording.findOne({ egressId: session.egressId }).lean();
         if (existingRecording && existingRecording.startedAt) {
           durationSeconds = Math.round((endedAt.getTime() - new Date(existingRecording.startedAt).getTime()) / 1000);
@@ -345,22 +331,32 @@ router.post('/:id/end', protect, authorize('trainer'), async (req, res) => {
         }
         await Recording.findOneAndUpdate(
           { egressId: session.egressId },
-          { $set: { endedAt, durationSeconds } },
+          { $set: { endedAt, durationSeconds, status: 'processing' } },
           { new: true }
         );
-        if (existingRecording && existingRecording.status !== 'completed') {
-          await Recording.findOneAndUpdate(
-            { egressId: session.egressId },
-            { $set: { status: 'processing' } }
-          );
-        }
+        if (session.recordingStatus === 'recording') session.recordingStatus = 'processing';
       }
     } catch (_) {}
 
     session.status  = 'completed';
     session.endedAt = endedAt;
-    if (session.recordingStatus === 'recording') session.recordingStatus = 'processing';
     await session.save();
+
+    if (reconcileEgressId) {
+      try {
+        const reconciled = await reconcileRecordingByEgressId(reconcileEgressId, { maxAttempts: 10, delayMs: 2000, markFailed: true });
+        if (reconciled?.status === 'completed') {
+          session.recordingStatus = 'available';
+          session.recordingUrl = reconciled.url || session.recordingUrl;
+          session.egressId = '';
+          await session.save();
+        } else if (reconciled?.status === 'failed') {
+          session.recordingStatus = 'failed';
+          session.egressId = '';
+          await session.save();
+        }
+      } catch (_) {}
+    }
 
     // Update WorkshopBatch status to Completed
     try {
@@ -679,7 +675,13 @@ router.post('/:id/recording/start', protect, authorize('trainer'), async (req, r
       return res.status(403).json({ success: false, message: 'Forbidden' });
 
     if (session.recordingStatus === 'recording') {
-      return res.status(409).json({ success: false, message: 'Recording is already in progress for this session' });
+      return res.status(409).json({ success: false, message: 'Recording is already in progress' });
+    }
+    if (session.recordingStatus === 'processing') {
+      return res.status(409).json({ success: false, message: 'A recording is still processing. Please wait before starting a new one.' });
+    }
+    if (session.recordingStatus === 'failed') {
+      session.recordingStatus = 'none';
     }
 
     const roomName = roomNameFor(session._id);
@@ -791,34 +793,44 @@ router.post('/:id/recording/stop', protect, authorize('trainer'), async (req, re
     session.recordingStatus = 'processing';
     await session.save();
 
-    // Reconcile MP4 on disk (webhook may be delayed)
-    try {
-      recordingDoc = await reconcileRecordingByEgressId(session.egressId, { maxAttempts: 10, delayMs: 2000 });
-      if (recordingDoc?.status === 'completed') {
-        session.recordingStatus = 'available';
-        session.recordingUrl = recordingDoc.url || session.recordingUrl;
-        await session.save();
-      }
-    } catch (recErr) {
-      console.warn('Workshop recording reconcile:', recErr.message);
-    }
+    const stoppedEgressId = session.egressId;
 
-    // Emit realtime event
-    try {
-      const { emitToSession } = require('../services/socketService');
-      emitToSession(session._id.toString(), 'recording:status', {
-        sessionId: session._id,
-        recordingId: recordingDoc?._id,
-        status: 'processing',
-        endedAt,
-        durationSeconds,
-      });
-    } catch (_) {}
+    // Reconcile in background — do not block the stop response (UI must update immediately)
+    setImmediate(async () => {
+      try {
+        const reconciled = await reconcileRecordingByEgressId(stoppedEgressId, { maxAttempts: 15, delayMs: 2000, markFailed: true });
+        const freshSession = await Session.findById(session._id);
+        if (!freshSession) return;
+        if (reconciled?.status === 'completed') {
+          freshSession.recordingStatus = 'available';
+          freshSession.recordingUrl = reconciled.url || freshSession.recordingUrl;
+          freshSession.egressId = '';
+          await freshSession.save();
+        } else if (reconciled?.status === 'failed') {
+          freshSession.recordingStatus = 'none';
+          freshSession.egressId = '';
+          await freshSession.save();
+        }
+        const finalStatus = reconciled?.status === 'completed' ? 'available'
+          : reconciled?.status === 'failed' ? 'failed' : 'processing';
+        const { emitToSession } = require('../services/socketService');
+        emitToSession(session._id.toString(), 'recording:status', {
+          sessionId: session._id,
+          recordingId: reconciled?._id,
+          status: finalStatus,
+          endedAt,
+          durationSeconds,
+        });
+      } catch (recErr) {
+        console.warn('Workshop recording reconcile:', recErr.message);
+      }
+    });
 
     return res.json({
       success: true,
       message: 'Recording stopped and processing',
       recording: recordingDoc,
+      recordingStatus: 'processing',
       durationSeconds,
     });
   } catch (err) {

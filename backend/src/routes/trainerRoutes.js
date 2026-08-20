@@ -15,6 +15,7 @@ const { protect, authorize } = require('../middleware/auth');
 const sessionCtrl = require('../controllers/sessionController');
 
 const { resolveRecordingPlayback, reconcileRecordingByEgressId } = require('../utils/recordingStorage');
+const { rejectPastDateTime } = require('../utils/dateTimeValidation');
 
 const router = express.Router();
 router.use(protect, authorize('trainer'));
@@ -128,13 +129,8 @@ router.post('/sessions', async (req, res) => {
       return res.status(400).json({ success: false, message: 'moduleId, sessionType and scheduledAt are required' });
     }
 
-    const scheduledDate = new Date(scheduledAt);
-    if (isNaN(scheduledDate.getTime())) {
-      return res.status(400).json({ success: false, message: 'Invalid scheduled date/time.' });
-    }
-    if (scheduledDate < new Date()) {
-      return res.status(400).json({ success: false, message: 'Session date and time cannot be in the past.' });
-    }
+    const check = rejectPastDateTime(scheduledAt, null, 'Session date and time');
+    if (!check.ok) return res.status(400).json({ success: false, message: check.message });
 
     let batchId = null;
     if (batch) {
@@ -173,13 +169,8 @@ router.put('/sessions/:id', async (req, res) => {
     update.sessionType = 'LMS';
 
     if (update.scheduledAt) {
-      const scheduledDate = new Date(update.scheduledAt);
-      if (isNaN(scheduledDate.getTime())) {
-        return res.status(400).json({ success: false, message: 'Invalid scheduled date/time.' });
-      }
-      if (scheduledDate < new Date()) {
-        return res.status(400).json({ success: false, message: 'Session date and time cannot be in the past.' });
-      }
+      const check = rejectPastDateTime(update.scheduledAt, null, 'Session date and time');
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
     }
 
     const session = await Session.findOneAndUpdate(
@@ -357,6 +348,9 @@ const startRecordingSession = async (req, res) => {
     if (session.recordingStatus === 'recording') {
       return res.status(409).json({ success: false, message: 'Recording is already in progress' });
     }
+    if (session.recordingStatus === 'processing') {
+      return res.status(409).json({ success: false, message: 'A recording is still processing. Please wait before starting a new one.' });
+    }
     const { startRecording, roomNameFor, roomService } = require('../services/livekitService');
     const Recording = require('../models/Recording');
     const roomName = session.roomName || roomNameFor(session._id);
@@ -428,7 +422,34 @@ const stopRecordingSession = async (req, res) => {
       { new: true }
     );
 
-    return res.json({ success: true, message: 'Recording stopped and processing', session });
+    const stoppedEgressId = session.egressId;
+    let recordingDoc = null;
+    try {
+      recordingDoc = await reconcileRecordingByEgressId(stoppedEgressId, { maxAttempts: 15, delayMs: 2000, markFailed: true });
+      if (recordingDoc?.status === 'completed') {
+        session.recordingStatus = 'available';
+        session.recordingUrl = recordingDoc.url || session.recordingUrl;
+        session.egressId = '';
+        await session.save();
+      } else if (recordingDoc?.status === 'failed') {
+        session.recordingStatus = 'failed';
+        session.egressId = '';
+        await session.save();
+      }
+    } catch (recErr) {
+      console.warn('LMS recording reconcile:', recErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: recordingDoc?.status === 'completed'
+        ? 'Recording saved and available'
+        : recordingDoc?.status === 'failed'
+          ? 'Recording processing failed'
+          : 'Recording stopped and processing',
+      session,
+      recording: recordingDoc,
+    });
   } catch (err) {
     console.error('stopRecordingSession error:', err);
     return res.status(500).json({ success: false, message: err.message });
@@ -447,12 +468,12 @@ router.get('/recordings', async (req, res) => {
       .limit(200)
       .lean();
 
-    // Repair stuck workshop recordings when MP4 already exists on disk
+    // Repair stuck recordings when MP4 already exists on disk
     const stuck = recordings.filter(
-      (r) => r.egressId && ['processing', 'active'].includes(r.status) && r.sessionId?.sessionType === 'WORKSHOP'
+      (r) => r.egressId && ['processing', 'active'].includes(r.status)
     );
     for (const r of stuck.slice(0, 8)) {
-      try { await reconcileRecordingByEgressId(r.egressId, { maxAttempts: 1 }); } catch (_) {}
+      try { await reconcileRecordingByEgressId(r.egressId, { maxAttempts: 2, delayMs: 500 }); } catch (_) {}
     }
 
     const fresh = stuck.length
@@ -480,11 +501,18 @@ router.get('/recordings/:id', async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ success: false, message: 'Invalid recording ID' });
     }
-    const recording = await Recording.findById(req.params.id)
+    let recording = await Recording.findById(req.params.id)
       .populate('sessionId', 'title sessionType scheduledAt status')
       .lean();
     if (!recording) {
       return res.status(404).json({ success: false, message: 'Recording not found' });
+    }
+
+    if (recording.egressId && ['processing', 'active'].includes(recording.status)) {
+      try {
+        const reconciled = await reconcileRecordingByEgressId(recording.egressId, { maxAttempts: 5, delayMs: 1000 });
+        if (reconciled) recording = reconciled;
+      } catch (_) {}
     }
 
     const { url, playable } = resolveRecordingPlayback(recording);

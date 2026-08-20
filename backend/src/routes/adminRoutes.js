@@ -12,42 +12,9 @@ const Interview    = require('../models/Interview');
 const Recording    = require('../models/Recording');
 const LmsFeedback  = require('../models/LmsFeedback');
 const { protect, authorize } = require('../middleware/auth');
+const { resolveRecordingPlayback } = require('../utils/recordingStorage');
+const { rejectPastDate } = require('../utils/dateTimeValidation');
 const mongoose = require('mongoose');
-
-const RECORDINGS_DIR = path.join(__dirname, '..', '..', '..', 'lms-recordings');
-const BASE_RECORDING_URL = (process.env.PUBLIC_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
-
-function resolveRecordingPlayback(recording) {
-  let relPath = '';
-  let url = recording.url || '';
-
-  if (url) {
-    relPath = url.replace(/^https?:\/\/[^\/]+/, '').replace(/^\/+/, '').replace(/^recordings\//, '').replace(/^out\//, '').replace(/^\/+/, '');
-  }
-  if (!relPath && recording.filename) {
-    relPath = recording.filename.replace(/^\/out\//, '').replace(/^\/+/, '');
-  }
-  if (!relPath && recording.roomName) {
-    const roomDir = path.join(RECORDINGS_DIR, recording.roomName);
-    if (fs.existsSync(roomDir) && fs.statSync(roomDir).isDirectory()) {
-      const mp4s = fs.readdirSync(roomDir).filter(f => f.endsWith('.mp4'));
-      if (mp4s.length > 0) {
-        relPath = `${recording.roomName}/${mp4s[0]}`;
-      }
-    }
-  }
-  if (relPath) {
-    url = `${BASE_RECORDING_URL}/recordings/${relPath}`;
-  }
-
-  let playable = false;
-  if (relPath) {
-    const filePath = path.join(RECORDINGS_DIR, relPath);
-    playable = fs.existsSync(filePath) && fs.statSync(filePath).size > 0;
-  }
-
-  return { url, playable, relPath };
-}
 
 const router = express.Router();
 
@@ -317,9 +284,8 @@ router.get('/batches', async (req, res) => {
 router.post('/batches', async (req, res) => {
   const { name, startDate } = req.body;
   if (!name || !startDate) return res.status(400).json({ success: false, message: 'name and startDate required' });
-  const sd = new Date(startDate);
-  if (isNaN(sd.getTime())) return res.status(400).json({ success: false, message: 'Invalid start date.' });
-  if (sd < new Date()) return res.status(400).json({ success: false, message: 'Batch start date cannot be in the past.' });
+  const check = rejectPastDate(startDate, 'Batch start date');
+  if (!check.ok) return res.status(400).json({ success: false, message: check.message });
   const batch = await Batch.create(req.body);
   return res.status(201).json({ success: true, data: batch });
 });
@@ -327,9 +293,8 @@ router.post('/batches', async (req, res) => {
 // PUT /api/admin/batches/:id
 router.put('/batches/:id', async (req, res) => {
   if (req.body.startDate) {
-    const sd = new Date(req.body.startDate);
-    if (isNaN(sd.getTime())) return res.status(400).json({ success: false, message: 'Invalid start date.' });
-    if (sd < new Date()) return res.status(400).json({ success: false, message: 'Batch start date cannot be in the past.' });
+    const check = rejectPastDate(req.body.startDate, 'Batch start date');
+    if (!check.ok) return res.status(400).json({ success: false, message: check.message });
   }
   const batch = await Batch.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
   if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });

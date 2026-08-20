@@ -90,21 +90,45 @@ export default function LiveRoom({
 
   // Sync initial recording state from backend session
   useEffect(() => {
-    if (!sessionId || !authToken) return;
+    if (!sessionId || !authToken) return undefined;
     const API = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
     const endpoint = sessionType === 'WORKSHOP'
       ? `${API}/api/workshop-sessions/${sessionId}`
-      : `${API}/api/trainer/sessions/${sessionId}`;
-    fetch(endpoint, { headers: { Authorization: `Bearer ${authToken}` } })
+      : `${API}/api/sessions/${sessionId}`;
+
+    const syncStatus = () => fetch(endpoint, { headers: { Authorization: `Bearer ${authToken}` } })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
         const recStatus = data?.session?.recordingStatus || data?.recordingStatus;
         if (recStatus === 'recording') setRecordingState('recording');
-        else if (recStatus === 'processing') setRecordingState('processing');
-        else setRecordingState('none');
+        else if (recStatus === 'processing') {
+          recordingStartTimeRef.current = null;
+          setRecordingTimer(0);
+          setRecordingState('processing');
+        }
+        else if (recStatus === 'failed') {
+          recordingStartTimeRef.current = null;
+          setRecordingTimer(0);
+          setRecordingState('none');
+          setRecordingError('Recording processing failed. Please try again.');
+        } else {
+          recordingStartTimeRef.current = null;
+          setRecordingTimer(0);
+          setRecordingState('none');
+        }
       })
       .catch(() => {});
-  }, [sessionId, authToken, sessionType]);
+
+    syncStatus();
+    if (recordingState !== 'processing') return undefined;
+
+    const timer = setInterval(syncStatus, 3000);
+    const timeout = setTimeout(() => clearInterval(timer), 90000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(timeout);
+    };
+  }, [sessionId, authToken, sessionType, recordingState]);
 
   // Recording timer — counts from a stable start timestamp to avoid drift/reset
   useEffect(() => {
@@ -266,6 +290,9 @@ export default function LiveRoom({
                          ? `${base}/api/workshop-sessions/${sessionId}`
                          : `${base}/api/trainer/sessions/${sessionId}`;
                        if (recordingState === 'recording') {
+                         recordingStartTimeRef.current = null;
+                         setRecordingTimer(0);
+                         setRecordingState('processing');
                          setRecordingLoading(true);
                          try {
                            const res = await fetch(`${recBase}/recording/stop`, {
@@ -274,7 +301,6 @@ export default function LiveRoom({
                            });
                            const data = await res.json().catch(() => ({}));
                            if (res.ok && data.success) {
-                             recordingStartTimeRef.current = null;
                              setRecordingState('processing');
                            } else {
                              setRecordingError(data.message || 'Failed to stop recording');
@@ -282,6 +308,7 @@ export default function LiveRoom({
                            }
                          } catch (_) {
                            setRecordingError('Network error while stopping recording');
+                           setRecordingState('recording');
                          } finally {
                            setRecordingLoading(false);
                          }

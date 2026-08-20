@@ -144,7 +144,7 @@ export default function TrainerRecordings() {
                   <td style={S.td}>{fmtDuration(r.durationSeconds)}</td>
                   <td style={S.td}><StatusBadge status={r.status} /></td>
                   <td style={S.td}>
-                    {r.playable ? (
+                    {(r.playable || (r.url && (r.status === 'completed' || r.status === 'available'))) ? (
                       <button onClick={() => navigate(`/trainer/recordings/${r._id}`)} style={{ background: 'none', border: 'none', color: '#2f6f9b', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>▶ Watch</button>
                     ) : r.url ? (
                       <span style={{ fontSize: 13, color: '#94A3B8', cursor: 'not-allowed' }} title="Recording file unavailable">▶ Unavailable</span>

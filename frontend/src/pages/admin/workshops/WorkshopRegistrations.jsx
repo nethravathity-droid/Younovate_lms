@@ -16,6 +16,7 @@ import {
   selectTempPasswordRegEmail,
 } from '../../../features/workshops/workshopSlice';
 import toast from 'react-hot-toast';
+import { isPastDateOnly, isPastDateTime } from '../../../utils/dateTime';
 
 const S = {
   page:  { padding: '20px 28px', fontFamily: 'Public Sans, system-ui, sans-serif', background: '#F1F5F9', minHeight: '100vh' },
@@ -250,11 +251,10 @@ const handleDelete = async (id, name) => {
     if (!form.startDate) return 'Start date is required.';
 
     // Past-date check
-    const startDateCheck = new Date(form.startDate);
-    if (isNaN(startDateCheck.getTime())) return 'Invalid start date.';
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (startDateCheck < today) return 'Start date cannot be in the past.';
+    if (isPastDateOnly(form.startDate)) return 'Start date cannot be in the past.';
+    if (form.startTime && isPastDateTime(form.startDate, form.startTime)) {
+      return 'Start date/time cannot be in the past.';
+    }
     if (!selectedApprovedRegs.length) return 'Select at least one trainee.';
 
     // Dates

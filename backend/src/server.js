@@ -13,7 +13,7 @@ const cors         = require('cors');
 const helmet       = require('helmet');
 const cookieParser = require('cookie-parser');
 const morgan       = require('morgan');
-const rateLimit    = require('express-rate-limit');
+const { globalLimiter } = require('./middleware/rateLimiters');
 
 const connectDB      = require('./config/database');
 const { initSocket } = require('./services/socketService');
@@ -64,22 +64,6 @@ app.use('/api/livekit/webhook', express.raw({ type: ['application/json', 'applic
 
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests — slow down.' },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many auth attempts. Try again in 15 minutes.' },
-});
-
 app.use(globalLimiter);
 
 // ── Body parsing ──────────────────────────────────────────────────────────────
@@ -90,9 +74,11 @@ app.use(cookieParser());
 // ── Static file serving ───────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/recordings', (req, res, next) => {
+  // Frontend (:3000) loads videos from API (:8080) — allow cross-origin media embedding.
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   const csp = res.getHeader('Content-Security-Policy');
   if (csp && !String(csp).includes('media-src')) {
-    res.setHeader('Content-Security-Policy', String(csp) + " media-src 'self' http://localhost:3000 data: blob:;");
+    res.setHeader('Content-Security-Policy', String(csp) + " media-src 'self' http://localhost:3000 http://localhost:8080 data: blob:;");
   }
   next();
 });
@@ -117,7 +103,7 @@ app.get('/api/health', (req, res) =>
 app.use('/api/livekit', livekitTokenRoutes);
 
 // ── API routes ────────────────────────────────────────────────────────────────
-app.use('/api/auth',           authLimiter, authRoutes);
+app.use('/api/auth',           authRoutes);
 app.use('/api/admin',          adminRoutes);
 app.use('/api/trainer',        trainerRoutes);
 app.use('/api/trainer/workshops', trainerWorkshopRoutes);

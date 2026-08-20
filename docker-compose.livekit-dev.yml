@@ -26,6 +26,8 @@ services:
 
   livekit-egress:
     image: livekit/egress:latest
+    # Run as root so MP4s written to the bind mount are visible on Windows hosts.
+    user: "0:0"
     restart: unless-stopped
     volumes:
       - ./lms-recordings:/out

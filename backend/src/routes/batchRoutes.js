@@ -3,6 +3,7 @@ const express = require('express');
 const Batch   = require('../models/Batch');
 const User    = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
+const { rejectPastDate } = require('../utils/dateTimeValidation');
 
 const router = express.Router();
 router.use(protect);
@@ -78,11 +79,8 @@ router.get('/:id', async (req, res) => {
 router.post('/', authorize('admin'), async (req, res) => {
   try {
     if (req.body.startDate) {
-      const sd = new Date(req.body.startDate);
-      if (isNaN(sd.getTime()))
-        return res.status(400).json({ success: false, message: 'Invalid start date.' });
-      if (sd < new Date())
-        return res.status(400).json({ success: false, message: 'Batch start date cannot be in the past.' });
+      const check = rejectPastDate(req.body.startDate, 'Batch start date');
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
     }
     const batch = await Batch.create(req.body);
     return res.status(201).json({ success: true, data: batch });
@@ -95,11 +93,8 @@ router.post('/', authorize('admin'), async (req, res) => {
 router.put('/:id', authorize('admin'), async (req, res) => {
   try {
     if (req.body.startDate) {
-      const sd = new Date(req.body.startDate);
-      if (isNaN(sd.getTime()))
-        return res.status(400).json({ success: false, message: 'Invalid start date.' });
-      if (sd < new Date())
-        return res.status(400).json({ success: false, message: 'Batch start date cannot be in the past.' });
+      const check = rejectPastDate(req.body.startDate, 'Batch start date');
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
     }
     const batch = await Batch.findByIdAndUpdate(
       req.params.id, req.body,

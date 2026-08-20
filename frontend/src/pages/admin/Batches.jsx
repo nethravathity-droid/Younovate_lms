@@ -22,6 +22,7 @@ import {
 } from '../../features/admin/adminSlice';
 
 import { selectUserRole } from '../../features/auth/authSlice';
+import { isPastDateOnly } from '../../utils/dateTime';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -227,11 +228,7 @@ const BatchFormModal = ({ editBatch, trainers, courses, onClose, pushToast }) =>
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.startDate) {
-      const sd = new Date(form.startDate);
-      if (isNaN(sd.getTime())) return setFormError('Invalid start date.');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (sd < today) return setFormError('Batch start date cannot be in the past.');
+      if (isPastDateOnly(form.startDate)) return setFormError('Batch start date cannot be in the past.');
     }
     const payload = {
       ...form,

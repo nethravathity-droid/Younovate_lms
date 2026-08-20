@@ -11,6 +11,8 @@ const {
   normalizeRelPath,
   buildRecordingUrl,
   reconcileRecordingByEgressId,
+  fileExistsForRelPath,
+  ensureMp4WebPlayable,
 } = require('../utils/recordingStorage');
 
 const router = express.Router();
@@ -67,21 +69,7 @@ function buildUpdateFromEvent(eg, url, relPath) {
 }
 
 function tryFastStartMp4(filePath) {
-  try {
-    const { execSync } = require('child_process');
-    const fastStartPath = filePath + '.faststart.mp4';
-    execSync(
-      `"${process.env.FFMPEG_PATH || 'ffmpeg'}" -i "${filePath}" -c copy -movflags +faststart "${fastStartPath}" -y`,
-      { stdio: 'ignore', timeout: 120000 }
-    );
-    if (fs.existsSync(fastStartPath) && fs.statSync(fastStartPath).size > 0) {
-      fs.renameSync(fastStartPath, filePath);
-    } else if (fs.existsSync(fastStartPath)) {
-      fs.unlinkSync(fastStartPath);
-    }
-  } catch (_) {
-    // ffmpeg not available or failed — leave file as-is
-  }
+  ensureMp4WebPlayable(filePath);
 }
 
 router.post('/', async (req, res) => {
@@ -103,14 +91,13 @@ router.post('/', async (req, res) => {
 
     if (isTerminal) {
       const filePath = relPath ? path.join(RECORDINGS_DIR, relPath) : '';
-      const fileExists = filePath
-        ? fs.existsSync(filePath) && fs.statSync(filePath).size > 0
-        : false;
+      const fileExists = relPath ? fileExistsForRelPath(relPath) : false;
 
       const { update, durationSeconds, sizeBytes } = buildUpdateFromEvent(eg, url, relPath);
       update.endedAt = new Date();
 
       if (fileExists) {
+        ensureMp4WebPlayable(filePath);
         update.status = 'completed';
         update.error  = '';
       } else {
@@ -141,7 +128,7 @@ router.post('/', async (req, res) => {
         const playUrl = finalRec.url || url;
         await Session.findOneAndUpdate(
           { $or: [{ egressId: eg.egressId }, { roomName: eg.roomName }] },
-          { recordingUrl: playUrl, recordingStatus: 'available' }
+          { recordingUrl: playUrl, recordingStatus: 'available', egressId: '' }
         );
         console.log('Recording saved →', playUrl, `(${durationSeconds}s, ${sizeBytes} bytes)`, finalRec._id);
 

@@ -76,3 +76,17 @@ export const isPastDateTime = (dateStr, timeStr) => {
   if (Number.isNaN(d.getTime())) return false;
   return d < new Date();
 };
+
+export const startOfToday = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+/** Date-only: true if calendar date is before today. */
+export const isPastDateOnly = (dateStr) => {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return false;
+  const dateOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return dateOnly < startOfToday();
+};

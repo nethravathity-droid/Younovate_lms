@@ -6,6 +6,7 @@ const express    = require('express');
 const Session    = require('../models/Session');
 const { emitToRole } = require('../services/socketService');
 const { protect, authorize } = require('../middleware/auth');
+const { rejectPastDateTime } = require('../utils/dateTimeValidation');
 const sessionCtrl = require('../controllers/sessionController');
 
 const router = express.Router();
@@ -51,11 +52,8 @@ router.post('/', authorize('admin'), async (req, res) => {
   if (!title || !batchId || !trainerId || !scheduledAt)
     return res.status(400).json({ success: false, message: 'title, batchId, trainerId, scheduledAt required' });
 
-  const scheduledDate = new Date(scheduledAt);
-  if (isNaN(scheduledDate.getTime()))
-    return res.status(400).json({ success: false, message: 'Invalid scheduled date/time.' });
-  if (scheduledDate < new Date())
-    return res.status(400).json({ success: false, message: 'Session date and time cannot be in the past.' });
+  const check = rejectPastDateTime(scheduledAt, null, 'Session date and time');
+  if (!check.ok) return res.status(400).json({ success: false, message: check.message });
 
   const session = await Session.create({ ...req.body, sessionType: 'LMS' });
   await session.populate('trainerId', 'name');
@@ -69,11 +67,8 @@ router.put('/:id', authorize('admin'), async (req, res) => {
   const update = { ...req.body, sessionType: 'LMS' };
 
   if (update.scheduledAt) {
-    const sd = new Date(update.scheduledAt);
-    if (isNaN(sd.getTime()))
-      return res.status(400).json({ success: false, message: 'Invalid scheduled date/time.' });
-    if (sd < new Date())
-      return res.status(400).json({ success: false, message: 'Session date and time cannot be in the past.' });
+    const check = rejectPastDateTime(update.scheduledAt, null, 'Session date and time');
+    if (!check.ok) return res.status(400).json({ success: false, message: check.message });
   }
 
   const session = await Session.findOneAndUpdate(

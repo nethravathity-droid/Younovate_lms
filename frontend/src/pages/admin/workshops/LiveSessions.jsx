@@ -20,6 +20,7 @@ import {
   selectWSAttendance,
   clearWSSessionErrors,
 } from '../../../features/workshops/workshopSessionsSlice';
+import { minDateTime } from '../../../utils/dateTime';
 
 const S = {
   page:    { padding: '20px 28px', fontFamily: 'Public Sans, system-ui, sans-serif', background: '#F1F5F9', minHeight: '100vh' },
@@ -134,7 +135,7 @@ function ScheduleModal({ batches, batchStatus, onClose, onSave, saving, saveErro
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label style={{ display: 'block' }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5 }}>Date & Time *</span>
-              <input type="datetime-local" style={S.input} value={form.scheduledAt} onChange={e => set('scheduledAt', e.target.value)} required min={new Date().toISOString().slice(0, 16)} />
+              <input type="datetime-local" style={S.input} value={form.scheduledAt} onChange={e => set('scheduledAt', e.target.value)} required min={minDateTime()} />
             </label>
             <label style={{ display: 'block' }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5 }}>Duration (min)</span>
