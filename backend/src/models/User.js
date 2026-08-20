@@ -1,0 +1,173 @@
+// src/models/User.js
+'use strict';
+const mongoose = require('mongoose');
+const bcrypt   = require('bcryptjs');
+const crypto   = require('crypto');
+
+// ── Sub-schema: HR Evaluation ─────────────────────────────────────────────────
+const hrEvaluationSchema = new mongoose.Schema({
+  communication:         { type: Number, min: 0, max: 100 },
+  technical:             { type: Number, min: 0, max: 100 },
+  problemSolving:        { type: Number, min: 0, max: 100 },
+  attitude:              { type: Number, min: 0, max: 100 },
+  learningAgility:       { type: Number, min: 0, max: 100 },
+  operationalReadiness:  { type: Number, min: 0, max: 100 },
+  confidence:            { type: Number, min: 0, max: 100 },
+  overallScore:          { type: Number, min: 0, max: 100 },
+  recommendation:        { type: String, default: '' },
+  evaluationNotes:       { type: String, default: '' },
+  evaluatedBy:           { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  evaluatedAt:           { type: Date },
+}, { _id: false });
+
+const userSchema = new mongoose.Schema({
+  // ── Core ──────────────────────────────────────────────────────────────────
+  name:     { type: String, required: true, trim: true },
+  email:    { type: String, required: true, lowercase: true, trim: true },
+  password: { type: String, required: true, minlength: 6, select: false },
+  role:     { type: String, enum: ['admin', 'trainer', 'trainee', 'hr'], default: 'trainee' },
+  isActive: { type: Boolean, default: true },
+
+  // ── Profile ───────────────────────────────────────────────────────────────
+  phone:          { type: String, default: '' },
+  bio:            { type: String, default: '' },
+  profilePicture: { type: String, default: '' },
+  linkedIn:       { type: String, default: '' },
+  github:         { type: String, default: '' },
+  gender:         { type: String, default: '' },
+  dateOfBirth:    { type: Date },
+  address:        { type: String, default: '' },
+  city:           { type: String, default: '' },
+  state:          { type: String, default: '' },
+  country:        { type: String, default: '' },
+  pincode:        { type: String, default: '' },
+
+  // ── Shared professional fields (used by trainer / hr / trainee as applicable) ──
+  // Consolidated here so each path is declared exactly once.
+  designation:    { type: String, default: '' },
+  department:     { type: String, default: '' },
+  experience:     { type: Number, default: 0 },   // years
+  specialization: { type: String, default: '' },
+  portfolioUrl:   { type: String, default: '' },
+
+  // ── Trainee-specific ──────────────────────────────────────────────────────
+  // A user can now belong to MULTIPLE batches. This array is the source of truth.
+  batchIds:           [{ type: mongoose.Schema.Types.ObjectId, ref: 'Batch' }],
+  enrolledAt:         { type: Date },
+  skills:             [{ type: String }],
+  placementStatus:    {
+    type:    String,
+    enum:    ['enrolled', 'training', 'ready', 'interview_scheduled', 'interview_done', 'offer_extended', 'placed', 'not_placed'],
+    default: 'enrolled',
+  },
+  placementNote:      { type: String, default: '' },
+  companyName:        { type: String, default: '' },
+  ctc:                { type: String, default: '' },
+  placementUpdatedAt: { type: Date },
+  // Education
+  collegeName:    { type: String, default: '' },
+  degree:         { type: String, default: '' },
+  branch:         { type: String, default: '' },
+  graduationYear: { type: Number },
+  // Career
+  resumeUrl:      { type: String, default: '' },
+  hrEvaluation:   hrEvaluationSchema,
+
+  // ── Trainer-specific ──────────────────────────────────────────────────────
+  expertise:      [{ type: String }],
+  certifications: [{ type: String }],
+  currentCompany: { type: String, default: '' },
+
+  // ── HR-specific ─────────────────────────────────────────────────────────────
+  employeeId:     { type: String, default: '' },
+
+// ── Auth fields (select: false — never leaked) ────────────────────────────
+  isTemporaryPassword:   { type: Boolean, default: false },
+  isWorkshopUser:        { type: Boolean, default: false },
+  accountStatus:         { type: String, enum: ['Active', 'Inactive', 'Suspended'], default: 'Active' },
+  sessionToken:          { type: String, select: false },
+  refreshToken:          { type: String, select: false },
+  lastLoginAt:           { type: Date },
+  passwordResetToken:    { type: String, select: false },
+  passwordResetExpires:  { type: Date,   select: false },
+  passwordResetAttempts: { type: Number, default: 0, select: false },
+}, {
+  timestamps: true,
+  toJSON:   { virtuals: true },
+  toObject: { virtuals: true },
+});
+
+// ── Backward-compatible populate-virtual ──────────────────────────────────────
+// `batchId` resolves to the FIRST batch in `batchIds`, so existing code that does
+// `.populate('batchId', 'name')` and reads `user.batchId.name` keeps working
+// unchanged — while `batchIds` holds every batch the user belongs to.
+// (localField/foreignField are what the previous "Cannot populate virtual" error
+//  was missing.)
+userSchema.virtual('batchId', {
+  ref:          'Batch',
+  localField:   'batchIds',
+  foreignField: '_id',
+  justOne:      true,   // return a single Batch document, not an array
+});
+
+// ── Indexes ───────────────────────────────────────────────────────────────────
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ role: 1, isActive: 1 });
+userSchema.index({ batchIds: 1 });
+userSchema.index({ placementStatus: 1 });
+userSchema.index({ role: 1, placementStatus: 1 });
+userSchema.index({ role: 1, createdAt: -1 });
+
+// ── Hash password before save ─────────────────────────────────────────────────
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+// ── Methods ───────────────────────────────────────────────────────────────────
+userSchema.methods.comparePassword = async function (plain) {
+  return bcrypt.compare(plain, this.password);
+};
+
+userSchema.methods.createPasswordResetOtp = async function () {
+  const otp  = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+  const salt = await bcrypt.genSalt(10);
+  this.passwordResetToken    = await bcrypt.hash(otp, salt);
+  this.passwordResetExpires  = new Date(Date.now() + 5 * 60 * 1000); // 5 min
+  this.passwordResetAttempts = 0;
+  return otp;
+};
+
+userSchema.methods.verifyPasswordResetOtp = async function (submitted) {
+  if (!this.passwordResetToken || !this.passwordResetExpires) return 'invalid';
+  if (new Date() > this.passwordResetExpires) {
+    this.passwordResetToken = this.passwordResetExpires = undefined;
+    this.passwordResetAttempts = 0;
+    return 'expired';
+  }
+  if (this.passwordResetAttempts >= 5) {
+    this.passwordResetToken = this.passwordResetExpires = undefined;
+    this.passwordResetAttempts = 0;
+    return 'max_attempts';
+  }
+  const match = await bcrypt.compare(submitted, this.passwordResetToken);
+  if (!match) { this.passwordResetAttempts += 1; return 'invalid'; }
+  return 'valid';
+};
+
+userSchema.methods.clearPasswordResetOtp = function () {
+  this.passwordResetToken = this.passwordResetExpires = undefined;
+  this.passwordResetAttempts = 0;
+};
+
+// Safe public subset — never expose password / tokens
+userSchema.methods.toPublic = function () {
+  const o = this.toObject();
+  delete o.password; delete o.sessionToken; delete o.refreshToken;
+  delete o.passwordResetToken; delete o.passwordResetExpires;
+  delete o.passwordResetAttempts; delete o.__v;
+  return o;
+};
+
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

@@ -1,0 +1,15 @@
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 51000
+  port_range_end: 51100
+redis:
+  address: redis:6379
+keys:
+  devkey: 94ec33834bd07f586fb50e064cb5c685ff7ed2aaec4a0c286ae29a9099de7ea5
+room:
+  auto_create: true
+webhook:
+  urls:
+    - http://host.docker.internal:8080/api/livekit/webhook
+  api_key: devkey

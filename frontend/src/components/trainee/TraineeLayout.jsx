@@ -1,0 +1,33 @@
+// src/components/trainee/TraineeLayout.jsx
+import React from 'react';
+import SidebarLayout from '../shared/SidebarLayout';
+
+const NAV = [
+  {
+    label: 'My Learning',
+    items: [
+      { to: '/trainee/dashboard',   icon: 'layout-dashboard', label: 'Dashboard'   },
+      { to: '/trainee/courses',     icon: 'book',             label: 'My Courses'  },
+      { to: '/trainee/sessions',    icon: 'video',            label: 'Sessions'    },
+      { to: '/trainee/attendance',  icon: 'user-check',       label: 'Attendance'  },
+      { to: '/trainee/feedback',    icon: 'star',             label: 'Feedback'    },
+    ],
+  },
+  {
+    label: 'Progress',
+    items: [
+      { to: '/trainee/progress',    icon: 'chart-line',       label: 'My Progress' },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { to: '/trainee/settings',    icon: 'settings',         label: 'Settings'    },
+    ],
+  },
+];
+
+export default function TraineeLayout() {
+  return <SidebarLayout navItems={NAV} title="Youva OS" />;
+}
+

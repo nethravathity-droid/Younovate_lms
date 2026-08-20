@@ -1,0 +1,8 @@
+api_key: devkey
+api_secret: 94ec33834bd07f586fb50e064cb5c685ff7ed2aaec4a0c286ae29a9099de7ea5
+ws_url: ws://livekit:7880
+redis:
+  address: redis:6379
+insecure: true
+logging:
+  level: info

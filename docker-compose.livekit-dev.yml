@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --bind 0.0.0.0 --config /etc/livekit.yaml
+    restart: unless-stopped
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "51000-51100:51000-51100/udp"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+    depends_on:
+      - redis
+    environment:
+      - LIVEKIT_REDIS_ADDR=redis:6379
+
+  livekit-egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    volumes:
+      - ./lms-recordings:/out
+      - ./egress.yaml:/etc/egress.yaml
+    cap_add:
+      - SYS_ADMIN
+    shm_size: "1g"
+    depends_on:
+      - redis
+      - livekit
+    environment:
+      - EGRESS_CONFIG_FILE=/etc/egress.yaml
+
+volumes:
+  redis-data:
