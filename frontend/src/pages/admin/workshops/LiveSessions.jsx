@@ -229,8 +229,16 @@ export default function LiveSessions() {
   const attMap = {};
   attendance.forEach(a => { if (a.studentId) attMap[a.studentId.toString()] = a; });
 
-  const joined    = participants.filter(p => attMap[p._id]?.attendanceStatus === 'Present' || attMap[p._id]?.attendanceStatus === 'Partial');
-  const notJoined = participants.filter(p => !attMap[p._id] || attMap[p._id]?.attendanceStatus === 'Absent');
+  const joined    = participants.filter(p => {
+    const key = (p.userId?._id || p.userId || p._id)?.toString();
+    const att = p.attendance || attMap[key];
+    return att?.attendanceStatus === 'Present' || att?.attendanceStatus === 'Partial';
+  });
+  const notJoined = participants.filter(p => {
+    const key = (p.userId?._id || p.userId || p._id)?.toString();
+    const att = p.attendance || attMap[key];
+    return !att || att.attendanceStatus === 'Absent';
+  });
 
   return (
     <div style={S.page}>

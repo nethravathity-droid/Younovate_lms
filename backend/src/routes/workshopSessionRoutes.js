@@ -14,6 +14,7 @@ const { generateLiveKitToken, roomNameFor, LIVEKIT_URL, startRecording, stopReco
 const { classifyAttendance, finalizeAttendanceOnEnd, finalizeWorkshopAttendanceOnEnd } = require('../utils/attendanceUtils');
 const { reconcileRecordingByEgressId } = require('../utils/recordingStorage');
 const { rejectPastDateTime } = require('../utils/dateTimeValidation');
+const { isWorkshopParticipant, syncWorkshopStudent } = require('../utils/participantValidation');
 const { emitToRole, emitToSession } = require('../services/socketService');
 
 const router    = express.Router();
@@ -432,10 +433,9 @@ router.post('/:id/join', protect, async (req, res) => {
 
     // For non-admin/non-trainer: verify the user's userId is in the batch students
     if (role !== 'admin' && role !== 'trainer') {
-      const isStudent = (batch.students || []).some(
-        s => s.toString() === req.user._id.toString()
-      );
+      const isStudent = await isWorkshopParticipant(batch, session, req.user._id, WorkshopAttendance);
       if (!isStudent) return res.status(403).json({ success: false, message: 'You are not a participant of this session' });
+      await syncWorkshopStudent(session.workshopBatchId, req.user._id, WorkshopBatch);
     }
 
     if (!session.canJoin())
@@ -465,9 +465,15 @@ router.post('/:id/join', protect, async (req, res) => {
       await WorkshopAttendance.findOneAndUpdate(
         { sessionId: session._id, studentId: req.user._id },
         {
-          $setOnInsert: attendanceData,
           $set: {
             joinTime: new Date(),
+            attendanceStatus: 'Present',
+            workshopBatchId: session.workshopBatchId,
+            workshopId: workshopId,
+          },
+          $setOnInsert: {
+            sessionId: session._id,
+            studentId: req.user._id,
           },
         },
         { upsert: true, setDefaultsOnInsert: true }

@@ -15,6 +15,13 @@ const {
   LIVEKIT_URL,
 } = require('../services/livekitService');
 const { classifyAttendance } = require('../utils/attendanceUtils');
+const {
+  isLmsParticipant,
+  isWorkshopParticipant,
+  getWorkshopBatchIdsForUser,
+  syncWorkshopStudent,
+  optionalRatings,
+} = require('../utils/participantValidation');
 
 const router = express.Router();
 router.use(protect, authorize('trainee'));
@@ -30,8 +37,8 @@ const traineeSessionFilter = (user) => ({
 
 function ensureEnrolled(session, user) {
   const batchIds   = (user.batchIds || []).map(String);
-  const inBatch    = session.batchId && batchIds.includes(String(session.batchId));
-  const isEnrolled = (session.trainees || []).some((t) => String(t) === String(user._id));
+  const inBatch    = session.batchId && batchIds.includes(String(session.batchId?._id || session.batchId));
+  const isEnrolled = (session.trainees || []).some((t) => String(t?._id || t) === String(user._id));
   return inBatch || isEnrolled;
 }
 
@@ -139,8 +146,19 @@ router.get('/dashboard', async (req, res) => {
 // LMS sessions ONLY — Workshop sessions served by /api/trainee/workshop-sessions
 router.get('/sessions', async (req, res) => {
   try {
-    const filter = { ...traineeSessionFilter(req.user), ...LMS_FILTER };
-    if (req.query.status) filter.status = req.query.status;
+    const attendedIds = await Attendance.find({ trainee: req.user._id }).distinct('session');
+    const filter = {
+      $and: [
+        LMS_FILTER,
+        {
+          $or: [
+            ...traineeSessionFilter(req.user).$or,
+            ...(attendedIds.length ? [{ _id: { $in: attendedIds } }] : []),
+          ],
+        },
+        ...(req.query.status ? [{ status: req.query.status }] : []),
+      ],
+    };
     const sessions = await Session.find(filter)
       .populate('trainerId', 'name profilePicture')
       .populate('batchId', 'name')
@@ -282,7 +300,9 @@ router.get('/profile', (req, res) => res.json({ success: true, user: req.user.to
 // GET /api/trainee/workshop-batches
 router.get('/workshop-batches', async (req, res) => {
   try {
-    const batches = await WorkshopBatch.find({ students: req.user._id })
+    const batchIds = await getWorkshopBatchIdsForUser(req.user._id, WorkshopBatch);
+    if (!batchIds.length) return res.json({ success: true, batches: [] });
+    const batches = await WorkshopBatch.find({ _id: { $in: batchIds } })
       .populate('workshopId', 'title date mode status')
       .populate('trainerId', 'name email profilePicture')
       .sort({ createdAt: -1 }).lean();
@@ -296,8 +316,7 @@ router.get('/workshop-batches', async (req, res) => {
 router.get('/workshop-sessions', async (req, res) => {
   try {
     const userId = req.user._id;
-    const myBatches = await WorkshopBatch.find({ students: userId }).select('_id workshopId batchName').lean();
-    const batchIds = myBatches.map(b => b._id);
+    const batchIds = await getWorkshopBatchIdsForUser(userId, WorkshopBatch);
     if (batchIds.length === 0) return res.json({ success: true, sessions: [] });
 
     const filter = { sessionType: 'WORKSHOP', workshopBatchId: { $in: batchIds } };
@@ -331,11 +350,13 @@ router.post('/workshop-sessions/:id/join', async (req, res) => {
     const session = await Session.findOne({ _id: req.params.id, sessionType: 'WORKSHOP' });
     if (!session) return res.status(404).json({ success: false, message: 'Workshop session not found' });
 
-    const batch = await WorkshopBatch.findById(session.workshopBatchId).select('students workshopId').lean();
+    const batch = await WorkshopBatch.findById(session.workshopBatchId).select('students workshopId registrationIds').lean();
     if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });
 
-    const isStudent = (batch.students || []).some(s => s.toString() === req.user._id.toString());
+    const isStudent = await isWorkshopParticipant(batch, session, req.user._id, WorkshopAttendance);
     if (!isStudent) return res.status(403).json({ success: false, message: 'You are not a participant of this session' });
+
+    await syncWorkshopStudent(session.workshopBatchId, req.user._id, WorkshopBatch);
 
     if (!session.canJoin())
       return res.status(409).json({ success: false, message: 'Session is not joinable at this time', status: session.status });
@@ -360,7 +381,18 @@ router.post('/workshop-sessions/:id/join', async (req, res) => {
     try {
       await WorkshopAttendance.findOneAndUpdate(
         { sessionId: session._id, studentId: req.user._id },
-        { $setOnInsert: attendanceData },
+        {
+          $set: {
+            joinTime: new Date(),
+            attendanceStatus: 'Present',
+            workshopBatchId: session.workshopBatchId,
+            workshopId: batch.workshopId,
+          },
+          $setOnInsert: {
+            sessionId: session._id,
+            studentId: req.user._id,
+          },
+        },
         { upsert: true, setDefaultsOnInsert: true }
       );
     } catch (attErr) {
@@ -462,8 +494,10 @@ router.post('/workshop-feedback', async (req, res) => {
 
     const batch = await WorkshopBatch.findById(session.workshopBatchId).lean();
     if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });
-    const isStudent = (batch.students || []).some(s => s.toString() === req.user._id.toString());
+    const isStudent = await isWorkshopParticipant(batch, session, req.user._id, WorkshopAttendance);
     if (!isStudent) return res.status(403).json({ success: false, message: 'You are not a participant of this session' });
+
+    await syncWorkshopStudent(session.workshopBatchId, req.user._id, WorkshopBatch);
 
     const resolvedWorkshopId = batch.workshopId || workshopId;
     if (!resolvedWorkshopId) {
@@ -486,10 +520,7 @@ router.post('/workshop-feedback', async (req, res) => {
       studentId: req.user._id,
       trainerId: session.trainerId,
       rating: overallRating,
-      trainerRating: trainerRating || 0,
-      contentRating: contentRating || 0,
-      audioRating: audioRating || 0,
-      videoRating: videoRating || 0,
+      ...optionalRatings({ trainerRating, contentRating, audioRating, videoRating }),
       comment: comment || '',
       suggestions: suggestions || '',
     });
@@ -551,7 +582,7 @@ router.post('/lms-feedback', async (req, res) => {
         message: 'Feedback can only be submitted after session completion',
       });
     }
-    if (!ensureEnrolled(session, req.user)) {
+    if (!(await isLmsParticipant(session, req.user, Attendance))) {
       return res.status(403).json({ success: false, message: 'You are not a participant of this session' });
     }
     if (!overallRating || overallRating < 1 || overallRating > 5) {
@@ -568,10 +599,7 @@ router.post('/lms-feedback', async (req, res) => {
       studentId: req.user._id,
       trainerId: session.trainerId,
       rating: overallRating,
-      trainerRating: trainerRating || 0,
-      contentRating: contentRating || 0,
-      audioRating: audioRating || 0,
-      videoRating: videoRating || 0,
+      ...optionalRatings({ trainerRating, contentRating, audioRating, videoRating }),
       comment: comment || '',
       suggestions: suggestions || '',
     });
