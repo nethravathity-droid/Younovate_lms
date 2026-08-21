@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { updateProfile, selectCurrentUser, selectAuthStatus } from '../../features/auth/authSlice';
+import { updateProfile, selectCurrentUser } from '../../features/auth/authSlice';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 
@@ -117,7 +117,6 @@ const SectionShell = ({ title, desc, saving, onSave, dirty, children, saveLabel 
 export default function TrainerSettings() {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector(selectCurrentUser);
-  const authStatus = useAppSelector(selectAuthStatus);
   
   const [tab, setTab] = useState('general');
   const [saving, setSaving] = useState(false);

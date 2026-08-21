@@ -1,14 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchWorkshopSessions,
   fetchWorkshopBatchesForSchedule,
   createWorkshopSession,
-  updateWorkshopSession,
-  deleteWorkshopSession,
   fetchSessionParticipants,
   fetchSessionAttendanceWS,
-  markAttendanceWS,
   selectWorkshopSessions,
   selectWSSessionStatus,
   selectWSSessionError,

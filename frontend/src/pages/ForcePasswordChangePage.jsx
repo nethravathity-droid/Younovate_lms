@@ -9,7 +9,6 @@ import {
   selectCurrentUser,
   selectIsAuthenticated,
   selectUserRole,
-  selectAuthStatus,
   selectAuthError,
   clearError,
   logout,
@@ -32,7 +31,6 @@ export default function ForcePasswordChangePage() {
   const currentUser     = useAppSelector(selectCurrentUser);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const role            = useAppSelector(selectUserRole);
-  const status          = useAppSelector(selectAuthStatus);
   const error           = useAppSelector(selectAuthError);
 
   const [newPassword, setNewPassword]         = useState('');

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { youvaTheme } from './youvaTokens';
 
 export function useScrollReveal(threshold = 0.15) {
 

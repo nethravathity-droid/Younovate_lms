@@ -10,7 +10,7 @@ import {
   selectWorkshopResources,
   selectSelectedWorkshopId,
 } from '../../features/Trainer/trainerWorkshopSlice';
-import { S, Pill, Spinner, Empty, PageHeader, KPICard, fmtDateTime, WorkshopSelector } from './workshopShared';
+import { S, Pill, Empty, PageHeader, KPICard, fmtDateTime, WorkshopSelector } from './workshopShared';
 
 const CSS = `@keyframes spin{to{transform:rotate(360deg)}} .ws-row:hover{background:#f9fafb!important} .ws-btn:hover{opacity:.85}`;
 

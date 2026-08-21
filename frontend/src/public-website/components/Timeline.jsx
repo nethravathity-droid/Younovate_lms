@@ -42,7 +42,6 @@ function TimelineStep({ step, idx, total }) {
       {/* Node */}
       <div style={{
         width: 56, height: 56, borderRadius: '50%',
-        background: `radial-gradient(circle, ${color}30, ${color}10)`,
         border: `2px solid ${color}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: `0 0 20px ${color}50`,

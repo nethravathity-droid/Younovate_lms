@@ -56,27 +56,6 @@ function BarChart({ data, labels, color, height = 100 }) {
   );
 }
 
-function LineChart({ data, labels, color, height = 80 }) {
-  const w = 300, h = height;
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
-  const range = max - min || 1;
-  const step = w / (data.length - 1 || 1);
-  const coords = data.map((v, i) => ({ x: i * step, y: h - ((v - min) / range) * (h - 16) - 8 }));
-  const d = coords.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  return (
-    <div>
-      <svg width="100%" viewBox={`0 0 ${w} ${h + 20}`} style={{ display: 'block' }}>
-        <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {coords.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3.5} fill={color} />)}
-        {labels.map((l, i) => (
-          <text key={i} x={coords[i].x} y={h + 14} textAnchor="middle" fontSize={9} fill="#94A3B8" fontFamily="inherit">{l}</text>
-        ))}
-      </svg>
-    </div>
-  );
-}
-
 export default function WorkshopReports() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);

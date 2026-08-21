@@ -168,7 +168,7 @@ export default function LiveWorkshop() {
     if (!sessionId) return;
     setRecording({ status: 'processing', loading: true, error: '' });
     try {
-      const res = await axios.post(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080'}/api/workshop-sessions/${sessionId}/recording/stop`, {}, {
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080'}/api/workshop-sessions/${sessionId}/recording/stop`, {}, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       setRecording({
@@ -208,8 +208,6 @@ export default function LiveWorkshop() {
   const isCompleted   = sessionStatus === 'completed';
   const isScheduled   = sessionStatus === 'scheduled';
   const canStart      = sessionId && isScheduled && !isLive && !isCompleted;
-  const canEnter      = isLive;
-  const canEnd        = isLive;
 
   const joined    = participants.filter(p => p.attendance?.attendanceStatus === 'Present' || p.attendance?.attendanceStatus === 'Partial');
   const notJoined = participants.filter(p => !p.attendance || p.attendance?.attendanceStatus === 'Absent');

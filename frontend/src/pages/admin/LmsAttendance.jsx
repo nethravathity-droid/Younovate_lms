@@ -105,8 +105,6 @@ export default function LmsAttendance() {
               <tbody>
                 {filtered.map((r, i) => {
                   const cfg = STATUS_CFG[r.status] || STATUS_CFG.absent;
-                  const join = r.joinedAt ? new Date(r.joinedAt) : null;
-                  const leave = r.leftAt ? new Date(r.leftAt) : null;
                   const dur = r.attendedSeconds ? `${Math.round(r.attendedSeconds / 60)}m` : '—';
                   return (
                     <tr key={r._id || i} style={{ borderBottom: '1px solid #F1F5F9' }}>

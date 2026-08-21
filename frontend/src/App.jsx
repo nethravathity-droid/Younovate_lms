@@ -102,8 +102,8 @@ import TraineeSessions   from './pages/trainee/Sessions';
 import TraineeAttendance from './pages/trainee/TraineeAttendance';
 import TraineeAssignments from './pages/trainee/Assignments';
 import TraineeSettings from './pages/trainee/Settings';
-import Trainee_Courses from './pages/trainee/Trainee_Courses';
-import Trainee_CourseDetail from './pages/trainee/Trainee_CourseDetail';
+import TraineeCourses from './pages/trainee/Trainee_Courses';
+import TraineeCourseDetail from './pages/trainee/Trainee_CourseDetail';
 import TraineeWorkshopFeedback from './pages/trainee/WorkshopFeedback';
 import TraineeProgress from './pages/trainee/Progress';
 import GlobalSearch from './pages/shared/GlobalSearch';
@@ -257,9 +257,9 @@ function App() {
             <Route path="progress"  element={<TraineeProgress />} />
             <Route path="settings"    element={<TraineeSettings />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="courses" element={<Trainee_Courses />} />
-            <Route path="coursess/:id" element={<Trainee_CourseDetail />} />
-            <Route path="coursess/:courseId" element={<Trainee_CourseDetail />} />
+            <Route path="courses" element={<TraineeCourses />} />
+            <Route path="coursess/:id" element={<TraineeCourseDetail />} />
+            <Route path="coursess/:courseId" element={<TraineeCourseDetail />} />
             <Route path="coursess/:courseId/segment/:segmentId" element={<CourseSegment />} />
             <Route path="coursess/:courseId/segment/:segmentId/:topicId" element={<CourseTopic />} />
             <Route path="coursess/:courseId/segment/:segmentId/:topicId/:lessonId" element={<LessonPlayer />} />      

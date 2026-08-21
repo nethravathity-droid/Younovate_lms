@@ -10,7 +10,7 @@ import {
   selectWorkshopStats,
 } from '../../features/Trainer/trainerWorkshopSlice';
 import {
-  C, S, Pill, Spinner, Empty, PageHeader, KPICard, StatusBadge, fmtDate,
+  C, S, Pill, Spinner, PageHeader, KPICard, StatusBadge, fmtDate,
 } from './workshopShared';
 
 const CSS = `@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} .ws-row:hover{background:#f9fafb!important} .ws-btn:hover{opacity:.85}`;

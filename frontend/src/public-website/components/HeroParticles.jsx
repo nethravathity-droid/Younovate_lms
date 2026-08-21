@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { youvaTheme } from './youvaTokens';
 
 export default function HeroParticles() {
   const canvasRef = useRef(null);

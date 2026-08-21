@@ -10,10 +10,6 @@ import {
   selectWsRegistrations,
   selectWsRegistrationsMeta,
   selectWsRegistrationsStatus,
-  clearTemporaryPassword,
-  selectTemporaryPassword,
-  selectTempPasswordRegName,
-  selectTempPasswordRegEmail,
 } from '../../../features/workshops/workshopSlice';
 import toast from 'react-hot-toast';
 import { isPastDateOnly, isPastDateTime } from '../../../utils/dateTime';
@@ -100,7 +96,6 @@ export default function WorkshopRegistrationsAdmin() {
     if (!window.confirm(`Approve ${selectedIds.length} registration(s)?`)) return;
     setBulkBusy(true);
     for (const id of selectedIds) {
-      const reg = registrations.find(r => r._id === id);
       await dispatch(updateWorkshopRegistration({ id, registrationStatus: 'Approved' }));
       // show temp password modal for first approved if returned
     }

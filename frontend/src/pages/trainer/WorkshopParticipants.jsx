@@ -8,7 +8,7 @@ import {
   selectWorkshopParticipants,
   selectSelectedWorkshopId,
 } from '../../features/Trainer/trainerWorkshopSlice';
-import { S, C, Pill, Spinner, Empty, PageHeader, KPICard } from './workshopShared';
+import { S, Empty, KPICard } from './workshopShared';
 
 const CSS = `
   @keyframes spin{to{transform:rotate(360deg)}}

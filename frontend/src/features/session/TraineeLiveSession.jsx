@@ -93,9 +93,6 @@ const TraineeLiveSession = ({ session, connection: connectionProp, onLeave }) =>
 
   const finaliseAttendance = async () => {
     if (!sessionId) return;
-    const attendedSeconds = joinedAtRef.current
-      ? Math.max(0, Math.round((Date.now() - joinedAtRef.current) / 1000))
-      : undefined;
     try {
       await axios.post(
         `${API}/api/trainee/sessions/${sessionId}/attendance/leave`,

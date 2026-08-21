@@ -8,7 +8,7 @@ import {
   selectWorkshopFeedback,
   selectSelectedWorkshopId,
 } from '../../features/Trainer/trainerWorkshopSlice';
-import { S, Spinner, Empty, PageHeader, KPICard, fmtDateTime, WorkshopSelector } from './workshopShared';
+import { S, Empty, PageHeader, KPICard, fmtDateTime, WorkshopSelector } from './workshopShared';
 
 const CSS = `@keyframes spin{to{transform:rotate(360deg)}} .ws-row:hover{background:#f9fafb!important}`;
 

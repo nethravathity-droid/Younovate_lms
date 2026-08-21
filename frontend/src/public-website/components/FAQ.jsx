@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 
 export default function FAQ({ items }) {
   const [openIdx, setOpenIdx] = useState(0);
@@ -21,8 +21,6 @@ export default function FAQ({ items }) {
 }
 
 function FAQItem({ item, open, onToggle }) {
-  const bodyRef = useRef(null);
-
   return (
     <div style={{
       borderRadius: 16,

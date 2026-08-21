@@ -37,7 +37,6 @@ import {
 // CONFIG
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const API         = '';                                  // empty → "/api/..." goes through the proxy
 const LIVEKIT_URL = process.env.REACT_APP_LIVEKIT_URL || '';
 
 
@@ -1083,9 +1082,7 @@ const TraineeDetail = ({ trainee, onBack, idx = 0 }) => {
   if (!trainee) return null;
 
   const c = COLORS[idx % COLORS.length];
-  const l = LIGHTS[idx % LIGHTS.length];
 
-  const score     = trainee.averageScore ?? trainee.score ?? null;
   const batchName = trainee.batchId?.name || (typeof trainee.batchId === 'string' ? trainee.batchId : null);
   const ready     = trainee.placementStatus === 'ready' || trainee.isPlacementReady;
 

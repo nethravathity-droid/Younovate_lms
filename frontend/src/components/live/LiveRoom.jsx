@@ -11,11 +11,10 @@ import {
   useTracks,
   useChat,
   useParticipants,
-  useLocalParticipant,
   useRoomContext,
   isTrackReference,
 } from '@livekit/components-react';
-import { Track, RoomEvent, ConnectionState } from 'livekit-client';
+import { Track } from 'livekit-client';
 import '@livekit/components-styles';
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -46,8 +45,7 @@ export default function LiveRoom({
   const [showDevices, setShowDevices] = useState(false);
   const [raisedHand, setRaisedHand] = useState(false);
   const [meetingTimer, setMeetingTimer] = useState(0);
-  const [connectionQuality, setConnectionQuality] = useState('good');
-  const [networkStatus, setNetworkStatus] = useState('connected');
+  const [connectionQuality] = useState('good');
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [recordingState, setRecordingState] = useState('none'); // none|recording|processing
   const [recordingLoading, setRecordingLoading] = useState(false);
@@ -164,8 +162,6 @@ export default function LiveRoom({
     setRaisedHand(h => !h);
     // Emit via chat data channel or socket
     try {
-      const msg = JSON.stringify({ type: 'raise_hand', action: !raisedHand ? 'raise' : 'lower' });
-      // Send via LiveKit data channel if available
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('livekit:raisehand', { detail: { raised: !raisedHand } });
         window.dispatchEvent(event);

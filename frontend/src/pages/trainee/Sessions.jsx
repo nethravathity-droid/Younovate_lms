@@ -5,7 +5,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import TraineeLiveSession from '../../features/session/TraineeLiveSession';
 import {
   joinSession, leaveSession, clearConnection,
-  selectSessions, selectSessionsStatus, selectSessionsError,
   selectJoinStatus, selectJoinError,
 } from '../../features/sessions/sessionsSlice';
 import {
