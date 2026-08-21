@@ -302,7 +302,7 @@ const SessionDetail = ({ mode = 'view' }) => {
       recordingUrl:    f.recordingUrl || undefined,
       description:     f.description,
     };
-    const result = await dispatch(isCreate ? createSession(payload) : updateSession({ id, changes: payload }));
+    const result = await dispatch(isCreate ? createSession(payload) : updateSession({ id, ...payload }));
     setBusy(false);
     const ok = (isCreate ? createSession.fulfilled : updateSession.fulfilled).match(result);
     if (ok) { await dispatch(fetchSessions()); navigate(-1); }

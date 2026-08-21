@@ -47,35 +47,6 @@ function AnimatedCounter({ value, suffix = '', durationMs = 1200 }) {
   );
 }
 
-function Breadcrumbs() {
-  const items = [
-    { label: 'Home', to: '/' },
-    { label: 'YouVA OS', to: '/about' },
-  ];
-
-  return (
-    <div style={{ marginTop: 74, marginBottom: 14 }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: youvaTheme.colors.muted, fontWeight: 850, fontSize: 13 }}>
-          <button
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, fontWeight: 900 }}
-          >
-            {items[0].label}
-          </button>
-          <span style={{ color: '#CBD5E1' }}>›</span>
-          <button
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, fontWeight: 900 }}
-          >
-            {items[1].label}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Home() {
   const navigate = useNavigate();
 

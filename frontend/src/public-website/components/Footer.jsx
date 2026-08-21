@@ -17,14 +17,14 @@ export default function Footer() {
             </p>
             <div className="pw-footer-socials">
               {[
-                { icon: 'ti-brand-linkedin', href: '#' },
-                { icon: 'ti-brand-instagram', href: '#' },
-                { icon: 'ti-brand-youtube', href: '#' },
-                { icon: 'ti-brand-twitter', href: '#' },
-              ].map(s => (
-                <a key={s.icon} href={s.href} className="pw-social-link" target="_blank" rel="noreferrer">
+                { icon: 'ti-brand-linkedin', label: 'LinkedIn' },
+                { icon: 'ti-brand-instagram', label: 'Instagram' },
+                { icon: 'ti-brand-youtube', label: 'YouTube' },
+                { icon: 'ti-brand-twitter', label: 'Twitter' },
+              ].map((s) => (
+                <span key={s.icon} className="pw-social-link" title={s.label} aria-hidden="true">
                   <i className={`ti ${s.icon}`} />
-                </a>
+                </span>
               ))}
             </div>
           </div>
@@ -56,8 +56,8 @@ export default function Footer() {
         <div className="pw-footer-bottom">
           <span>© {new Date().getFullYear()} YouVA OS by Younovate. All rights reserved.</span>
           <div className="pw-footer-legal">
-            <a href="#">Privacy Policy</a>
-            <a href="#">Terms of Service</a>
+            <Link to="/contact">Privacy Policy</Link>
+            <Link to="/contact">Terms of Service</Link>
           </div>
         </div>
       </footer>

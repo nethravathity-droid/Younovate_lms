@@ -21,7 +21,10 @@ router.get('/', async (req, res) => {
   const { status, batchId, page = 1, limit = 50 } = req.query;
   const filter = { ...LMS_FILTER };
   if (req.user.role === 'trainer') filter.trainerId = req.user._id;
-  if (req.user.role === 'trainee') filter.batchId   = req.user.batchId;
+  if (req.user.role === 'trainee') {
+    const batchIds = req.user.batchIds || [];
+    if (batchIds.length) filter.batchId = { $in: batchIds };
+  }
   if (status)  filter.status  = status;
   if (batchId) filter.batchId = batchId;
 

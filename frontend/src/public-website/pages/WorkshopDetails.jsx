@@ -8,11 +8,6 @@ import {
   selectCurrentStatus,
 } from '../../features/workshops/workshopSlice';
 
-const fmt = (d) => {
-  try { return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' }); }
-  catch { return d || '—'; }
-};
-
 const InfoPill = ({ label, value }) => (
   <div style={{ padding: '10px 12px', borderRadius: 16, background: '#FFFFFF', border: '1px solid #E2E8F0', minWidth: 170 }}>
     <div style={{ fontSize: 12, fontWeight: 900, color: '#475569', textTransform: 'uppercase' }}>{label}</div>
@@ -30,8 +25,6 @@ export default function WorkshopDetails() {
   useEffect(() => {
     if (id) dispatch(fetchWorkshopById(id));
   }, [id, dispatch]);
-
-  const workshopId = id;
 
   const isLoading = status === 'loading';
   const isFailed = status === 'failed';

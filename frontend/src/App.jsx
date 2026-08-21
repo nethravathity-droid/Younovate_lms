@@ -105,6 +105,8 @@ import TraineeSettings from './pages/trainee/Settings';
 import Trainee_Courses from './pages/trainee/Trainee_Courses';
 import Trainee_CourseDetail from './pages/trainee/Trainee_CourseDetail';
 import TraineeWorkshopFeedback from './pages/trainee/WorkshopFeedback';
+import TraineeProgress from './pages/trainee/Progress';
+import GlobalSearch from './pages/shared/GlobalSearch';
 
 
 
@@ -169,6 +171,7 @@ function App() {
           <Route path="/admin" element={<AdminLayout />}>
 
             <Route path="dashboard"     element={<AdminDashboard />} />
+            <Route path="search"        element={<GlobalSearch />} />
             <Route path="trainees"      element={<AdminTrainees />} />
             <Route path="trainers"      element={<AdminTrainers />} />
             <Route path="workshops"                element={<AdminWorkshopDashboard />} />
@@ -217,6 +220,7 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={['trainer']} />}>
           <Route path="/trainer" element={<TrainerLayout />}>
             <Route path="dashboard"   element={<TrainerDashboard />} />
+            <Route path="search"      element={<GlobalSearch />} />
               <Route path="batches"       element={<TrainerBatches />} />
             <Route path="sessions"    element={<TrainerSessions />} />
             <Route path="attendance"  element={<TrainerAttendance />} />
@@ -245,10 +249,12 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={['trainee']} />}>
           <Route path="/trainee" element={<TraineeLayout />}>
             <Route path="dashboard"   element={<TraineeDashboard />} />
+            <Route path="search"      element={<GlobalSearch />} />
             <Route path="sessions"    element={<TraineeSessions />} />
             <Route path="attendance"  element={<TraineeAttendance />} />
             <Route path="assignments" element={<TraineeAssignments />} />
             <Route path="feedback" element={<TraineeWorkshopFeedback />} />
+            <Route path="progress"  element={<TraineeProgress />} />
             <Route path="settings"    element={<TraineeSettings />} />
             <Route path="profile" element={<Profile />} />
             <Route path="courses" element={<Trainee_Courses />} />
@@ -265,6 +271,7 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={['hr']} />}>
           <Route path="/hr" element={<HRLayout />}>
             <Route path="dashboard"  element={<HRDashboard />} />
+            <Route path="search"     element={<GlobalSearch />} />
             <Route path="interviews" element={<HRInterviews />} />
             <Route path="pipeline"   element={<HRPipeline />} />
             <Route path="evaluations" element={<HREvaluationsList />} />

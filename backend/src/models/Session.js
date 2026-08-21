@@ -27,6 +27,10 @@ const sessionSchema = new mongoose.Schema({
   // who is allowed to attend (THIS was the missing piece)
   trainees:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
 
+  // LMS curriculum linkage (trainer session scheduler)
+  moduleId:    { type: String, default: '', trim: true },
+  lmsModuleId: { type: String, default: '', trim: true },
+
   // ── Scheduling / timer (the "Zoom" part) ────────────
   scheduledAt:       { type: Date,   required: true, index: true },        // meeting start time
   durationMinutes:   { type: Number, default: 60, min: 5, max: 600 },      // length of the meeting

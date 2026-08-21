@@ -18,7 +18,8 @@ import React, {
 } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { logout, logoutUser, selectCurrentUser } from '../../features/auth/authSlice';
+import { store } from '../../app/store';
+import { logout, logoutUser, selectCurrentUser, selectUserRole } from '../../features/auth/authSlice';
 import toast from 'react-hot-toast';
 
 // ─── Role → brand colour ──────────────────────────────────────────────────────
@@ -309,6 +310,7 @@ export default function SidebarLayout({
   const navigate  = useNavigate();
   const location  = useLocation();
   const user      = useAppSelector(selectCurrentUser);
+  const role      = useAppSelector(selectUserRole);
 
   const resolvedColor = brandColor || ROLE_COLOR[user?.role] || '#6366F1';
   const initials      = user?.name?.slice(0, 2).toUpperCase() || 'YN';
@@ -388,23 +390,24 @@ export default function SidebarLayout({
     .filter(it => it.to && it.icon)
     .slice(0, 5);
 
-  const handleLogout = useCallback(async () => {
+  const handleLogout = useCallback(() => {
+    if (loggingOut) return;
     setLoggingOut(true);
     setProfileOpen(false);
-    try {
-      await dispatch(logoutUser());
-    } finally {
-      dispatch(logout());
-      toast.success('Signed out successfully');
-      navigate('/login', { replace: true });
-    }
-  }, [dispatch, navigate]);
+
+    const token = store.getState().auth.token;
+    dispatch(logout());
+    navigate('/login', { replace: true });
+    toast.success('Signed out successfully');
+    dispatch(logoutUser({ token }));
+  }, [dispatch, navigate, loggingOut]);
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   const runSearch = (q) => {
-    // Hook this up to your search route/endpoint as needed.
-    navigate(`/${user?.role || ''}/search?q=${encodeURIComponent(q)}`);
+    const userRole = role || user?.role;
+    if (!userRole) return;
+    navigate(`/${userRole}/search?q=${encodeURIComponent(q)}`);
     setSearchOpen(false);
   };
 

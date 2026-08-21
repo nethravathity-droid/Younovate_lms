@@ -3,7 +3,7 @@
 
 const PHONE_RE = /^[6-9]\d{9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const NAME_RE  = /^[A-Za-z][A-Za-z\s'\-]{1,99}$/;
+const NAME_RE  = /^[A-Za-z][A-Za-z\s'-]{1,99}$/;
 const ONLY_SYMBOLS_RE = /^[^A-Za-z0-9]+$/;
 
 function isValidUrl(val, hostname) {

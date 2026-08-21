@@ -113,11 +113,16 @@ export const fetchCurrentUser = createAsyncThunk(
 );
 
 // ─── Logout (calls backend to rotate sessionToken) ───────────────────────────
+// Optional `{ token }` payload allows server invalidation after client state is cleared.
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
-  async (_, { getState, rejectWithValue }) => {
+  async (arg, { getState, rejectWithValue }) => {
     try {
-      const token = getState().auth.token;
+      const token =
+        (arg && typeof arg === 'object' && arg.token) ||
+        getState().auth.token ||
+        readToken();
+      if (!token) return;
       await axios.post(
         `${API}/api/auth/logout`,
         {},
@@ -439,7 +444,7 @@ const authSlice = createSlice({
 // SELECTORS
 // =============================================================================
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
-export const selectUserRole        = (state) => state.auth.user?.role    ?? null;
+export const selectUserRole        = (state) => state.auth.user?.role ?? state.auth.role ?? null;
 export const selectCurrentUser     = (state) => state.auth.user;
 export const selectAuthStatus      = (state) => state.auth.status;
 export const selectAuthError       = (state) => state.auth.error;

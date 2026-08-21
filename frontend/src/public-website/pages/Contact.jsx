@@ -140,20 +140,17 @@ export default function Contact() {
                     <span style={{ color: youvaTheme.colors.brand2 }}>→</span>
                   </a>
 
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate('/contact');
-                    }}
-                    style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', textDecoration: 'none', padding: '12px 14px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontWeight: 950 }}
+                  <button
+                    type="button"
+                    onClick={() => navigate('/contact')}
+                    style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', textDecoration: 'none', padding: '12px 14px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontWeight: 950, width: '100%', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
                   >
                     <span>
                       <span style={{ display: 'block', fontSize: 13 }}>Help Center</span>
                       <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#a9bad0', marginTop: 3 }}>FAQs & support</span>
                     </span>
                     <span style={{ color: youvaTheme.colors.accent }}>→</span>
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -174,9 +171,14 @@ export default function Contact() {
               </div>
 
               <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <a href="#" style={{ color: '#dbe3ed', textDecoration: 'none', fontWeight: 950, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 999, padding: '10px 12px', background: 'rgba(255,255,255,0.06)' }}>LinkedIn</a>
-                <a href="#" style={{ color: '#dbe3ed', textDecoration: 'none', fontWeight: 950, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 999, padding: '10px 12px', background: 'rgba(255,255,255,0.06)' }}>YouTube</a>
-                <a href="#" style={{ color: '#dbe3ed', textDecoration: 'none', fontWeight: 950, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 999, padding: '10px 12px', background: 'rgba(255,255,255,0.06)' }}>Instagram</a>
+                {['LinkedIn', 'YouTube', 'Instagram'].map((label) => (
+                  <span
+                    key={label}
+                    style={{ color: '#dbe3ed', fontWeight: 950, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 999, padding: '10px 12px', background: 'rgba(255,255,255,0.06)' }}
+                  >
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
 

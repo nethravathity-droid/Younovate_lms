@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../app/hooks';
+import { store } from '../../app/store';
 import { selectIsAuthenticated, selectUserRole, selectCurrentUser, logout, logoutUser } from '../../features/auth/authSlice';
 import GetStartedModal from './GetStartedModal';
 
@@ -41,10 +42,11 @@ export default function Navbar() {
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    const token = store.getState().auth.token;
     dispatch(logout());
-    await dispatch(logoutUser());
     navigate('/');
+    dispatch(logoutUser({ token }));
   };
 
   const navLinks = [

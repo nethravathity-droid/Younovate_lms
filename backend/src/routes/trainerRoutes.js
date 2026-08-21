@@ -26,6 +26,17 @@ const BASE_RECORDING_URL = (process.env.PUBLIC_API_URL || 'http://localhost:8080
 // LMS-only filter — never return WORKSHOP sessions from LMS endpoints
 const LMS_FILTER = { $or: [{ sessionType: 'LMS' }, { sessionType: { $exists: false } }, { sessionType: null }] };
 
+async function resolveBatchId(batch) {
+  if (!batch) return null;
+  const raw = String(batch).trim();
+  if (mongoose.Types.ObjectId.isValid(raw)) {
+    const byId = await Batch.findById(raw).select('_id').lean();
+    if (byId) return byId._id;
+  }
+  const byName = await Batch.findOne({ name: raw }).select('_id').lean();
+  return byName?._id || null;
+}
+
 // POST /api/trainer/sessions/:id/start  (Go Live)
 router.post('/sessions/:id/start', sessionCtrl.goLive);
 
@@ -119,11 +130,39 @@ router.get('/sessions', async (req, res) => {
   }
 });
 
+// GET /api/trainer/sessions/:id
+router.get('/sessions/:id', async (req, res) => {
+  try {
+    const session = await Session.findOne({ _id: req.params.id, trainerId: req.user._id, ...LMS_FILTER })
+      .populate('batchId', 'name')
+      .populate('trainerId', 'name email profilePicture');
+    if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+    return res.json({ success: true, session });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // POST /api/trainer/sessions
 // Always stamps sessionType: 'LMS'
 router.post('/sessions', async (req, res) => {
   try {
-    const { batch, moduleId, sessionType, scheduledAt, recordingLink, title } = req.body;
+    const {
+      batch,
+      moduleId,
+      sessionType,
+      scheduledAt,
+      recordingLink,
+      recordingUrl,
+      title,
+      durationMinutes,
+      description,
+      trainees,
+      topics,
+      resources,
+      passcode,
+      timezone,
+    } = req.body;
 
     if (!moduleId || !sessionType || !scheduledAt) {
       return res.status(400).json({ success: false, message: 'moduleId, sessionType and scheduledAt are required' });
@@ -132,24 +171,25 @@ router.post('/sessions', async (req, res) => {
     const check = rejectPastDateTime(scheduledAt, null, 'Session date and time');
     if (!check.ok) return res.status(400).json({ success: false, message: check.message });
 
-    let batchId = null;
-    if (batch) {
-      const batchDoc = await Batch.findOne({
-        $or: [{ name: batch }, { _id: batch.match(/^[0-9a-fA-F]{24}$/) ? batch : null }],
-      }).select('_id name');
-      if (batchDoc) batchId = batchDoc._id;
-    }
+    const batchId = await resolveBatchId(batch);
 
     const session = await Session.create({
-      title:         title || `${moduleId} — ${sessionType}`,
+      title:           title || `${moduleId} — ${sessionType}`,
+      description:     description || '',
       moduleId,
-      lmsModuleId:   moduleId,
-      sessionType:   'LMS',
-      scheduledAt:   new Date(scheduledAt),
-      recordingLink: recordingLink || '',
-      status:        'scheduled',
-      trainerId:     req.user._id,
-      batchId:       batchId || undefined,
+      lmsModuleId:     moduleId,
+      sessionType:     'LMS',
+      scheduledAt:     new Date(scheduledAt),
+      durationMinutes: durationMinutes != null ? Number(durationMinutes) : 60,
+      recordingUrl:    recordingUrl || recordingLink || '',
+      timezone:        timezone || undefined,
+      passcode:        passcode || '',
+      topics:          Array.isArray(topics) ? topics : undefined,
+      resources:       Array.isArray(resources) ? resources : undefined,
+      trainees:        Array.isArray(trainees) ? trainees : [],
+      status:          'scheduled',
+      trainerId:       req.user._id,
+      batchId:         batchId || undefined,
     });
 
     await session.populate('batchId', 'name');
@@ -162,15 +202,36 @@ router.post('/sessions', async (req, res) => {
 // PUT /api/trainer/sessions/:id
 router.put('/sessions/:id', async (req, res) => {
   try {
-    const allowed = ['title', 'scheduledAt', 'status', 'recordingLink'];
-    const update  = {};
-    allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+    const allowed = [
+      'title', 'scheduledAt', 'status', 'recordingUrl', 'recordingLink',
+      'description', 'durationMinutes', 'batchId', 'trainees', 'topics',
+      'resources', 'passcode', 'timezone', 'roomName', 'moduleId', 'lmsModuleId',
+    ];
+    const update = {};
+    allowed.forEach((k) => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+
+    if (update.recordingLink && !update.recordingUrl) {
+      update.recordingUrl = update.recordingLink;
+    }
+    delete update.recordingLink;
+
+    if (req.body.batch !== undefined) {
+      update.batchId = await resolveBatchId(req.body.batch);
+    }
+
+    if (update.moduleId && !update.lmsModuleId) update.lmsModuleId = update.moduleId;
+
     // Never allow changing sessionType away from LMS
     update.sessionType = 'LMS';
 
     if (update.scheduledAt) {
       const check = rejectPastDateTime(update.scheduledAt, null, 'Session date and time');
       if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+      update.scheduledAt = new Date(update.scheduledAt);
+    }
+
+    if (update.durationMinutes != null) {
+      update.durationMinutes = Number(update.durationMinutes);
     }
 
     const session = await Session.findOneAndUpdate(
@@ -340,7 +401,7 @@ router.get('/attendance/session/:sessionId', async (req, res) => {
 // POST /api/trainer/sessions/:id/recording/start
 const startRecordingSession = async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id);
+    const session = await Session.findOne({ _id: req.params.id, trainerId: req.user._id, ...LMS_FILTER });
     if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
     if (String(session.trainerId) !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Not your session' });
@@ -351,7 +412,7 @@ const startRecordingSession = async (req, res) => {
     if (session.recordingStatus === 'processing') {
       return res.status(409).json({ success: false, message: 'A recording is still processing. Please wait before starting a new one.' });
     }
-    const { startRecording, roomNameFor, roomService } = require('../services/livekitService');
+    const { startRecording, stopRecording, roomNameFor, roomService } = require('../services/livekitService');
     const Recording = require('../models/Recording');
     const roomName = session.roomName || roomNameFor(session._id);
     try {
@@ -361,21 +422,30 @@ const startRecordingSession = async (req, res) => {
     try {
       egressId = await startRecording(roomName);
       if (egressId) {
-        const recording = await Recording.create({
-          sessionId: session._id,
-          batchId: session.batchId,
-          trainerId: session.trainerId,
-          egressId,
-          roomName,
-          status: 'active',
-          startedAt: new Date(),
-        });
-        session.recordings.push(recording._id);
-        session.recordingStatus = 'recording';
-        session.egressId = egressId;
-        session.roomName = roomName;
-        await session.save();
-        return res.json({ success: true, message: 'Recording started', session });
+        try {
+          const recording = await Recording.create({
+            sessionId: session._id,
+            batchId: session.batchId,
+            trainerId: session.trainerId,
+            egressId,
+            roomName,
+            status: 'active',
+            startedAt: new Date(),
+          });
+          session.recordings.push(recording._id);
+          session.recordingStatus = 'recording';
+          session.egressId = egressId;
+          session.roomName = roomName;
+          await session.save();
+          return res.json({ success: true, message: 'Recording started', session, recording });
+        } catch (dbErr) {
+          try { await stopRecording(egressId); } catch (_) {}
+          console.error('Recording MongoDB save failed:', dbErr.message);
+          return res.status(500).json({
+            success: false,
+            message: 'Recording started but failed to save to database: ' + dbErr.message,
+          });
+        }
       }
     } catch (err) {
       console.warn('Recording start failed:', err.message);
@@ -391,7 +461,7 @@ const startRecordingSession = async (req, res) => {
 // POST /api/trainer/sessions/:id/recording/stop
 const stopRecordingSession = async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id);
+    const session = await Session.findOne({ _id: req.params.id, trainerId: req.user._id, ...LMS_FILTER });
     if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
     if (String(session.trainerId) !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Not your session' });

@@ -4,6 +4,10 @@ const mongoose   = require('mongoose');
 const Session    = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const Assignment = require('../models/Assignment');
+const Batch      = require('../models/Batch');
+const Enrollment = require('../models/Enrollment');
+const LessonProgress = require('../models/LessonProgress');
+const Course     = require('../models/Course');
 const WorkshopBatch = require('../models/WorkshopBatch');
 const LmsFeedback = require('../models/LmsFeedback');
 const { WorkshopAttendance, WorkshopCertificate } = require('../models/WorkshopModels');
@@ -753,6 +757,195 @@ router.get('/sessions/:id/join-status', async (req, res) => {
         scheduledAt: session.scheduledAt,
         durationMinutes: session.durationMinutes,
         title: session.title,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/trainee/progress — aggregated learning progress for the logged-in trainee
+router.get('/progress', async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const batchIds = req.user.batchIds || [];
+
+    const attendedIds = await Attendance.find({ trainee: userId }).distinct('session');
+    const sessionFilter = {
+      $and: [
+        LMS_FILTER,
+        {
+          $or: [
+            ...traineeSessionFilter(req.user).$or,
+            ...(attendedIds.length ? [{ _id: { $in: attendedIds } }] : []),
+          ],
+        },
+      ],
+    };
+
+    const [
+      enrollments,
+      lessonRows,
+      lmsSessions,
+      lmsAttendance,
+      assignments,
+      workshopAttendance,
+      myBatches,
+    ] = await Promise.all([
+      Enrollment.find({ student: userId })
+        .populate('course', 'name code status duration')
+        .populate('batch', 'name')
+        .lean(),
+      LessonProgress.find({ student: userId }).lean(),
+      Session.find(sessionFilter).select('status title scheduledAt').lean(),
+      Attendance.find({ trainee: userId })
+        .populate('session', 'title scheduledAt status')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Assignment.find({ batchId: { $in: batchIds }, status: { $ne: 'draft' } }).lean(),
+      WorkshopAttendance.find({ studentId: userId })
+        .populate('sessionId', 'title status scheduledAt')
+        .lean(),
+      Batch.find({ _id: { $in: batchIds } }).select('name course').lean(),
+    ]);
+
+    const uid = userId.toString();
+
+    // Course progress — prefer Enrollment records; supplement with LessonProgress aggregates
+    const coursesMap = new Map();
+    enrollments.forEach((e) => {
+      if (!e.course) return;
+      const id = String(e.course._id);
+      coursesMap.set(id, {
+        courseId: e.course._id,
+        name: e.course.name,
+        code: e.course.code || '',
+        progressPercent: e.progressPercent || 0,
+        completedLessons: e.completedLessons || 0,
+        status: e.status,
+        batchName: e.batch?.name || '',
+        lastAccessedAt: e.lastAccessedAt,
+      });
+    });
+
+    const lessonsByCourse = {};
+    lessonRows.forEach((lp) => {
+      const cid = String(lp.course);
+      if (!lessonsByCourse[cid]) lessonsByCourse[cid] = { total: 0, completed: 0 };
+      lessonsByCourse[cid].total += 1;
+      if (lp.status === 'completed') lessonsByCourse[cid].completed += 1;
+    });
+
+    for (const [cid, counts] of Object.entries(lessonsByCourse)) {
+      if (!coursesMap.has(cid)) {
+        const course = await Course.findById(cid).select('name code').lean();
+        if (course) {
+          coursesMap.set(cid, {
+            courseId: course._id,
+            name: course.name,
+            code: course.code || '',
+            progressPercent: counts.total ? Math.round((counts.completed / counts.total) * 100) : 0,
+            completedLessons: counts.completed,
+            status: counts.completed === counts.total && counts.total > 0 ? 'completed' : 'active',
+            batchName: '',
+            lastAccessedAt: null,
+          });
+        }
+      } else {
+        const entry = coursesMap.get(cid);
+        if (!entry.progressPercent && counts.total) {
+          entry.progressPercent = Math.round((counts.completed / counts.total) * 100);
+          entry.completedLessons = counts.completed;
+        }
+      }
+    }
+
+    const courses = [...coursesMap.values()];
+
+    const completedSessions = lmsSessions.filter((s) => s.status === 'completed').length;
+    const totalSessions = lmsSessions.length;
+
+    const totalAssignments = assignments.length;
+    const submittedAssignments = assignments.filter((a) =>
+      (a.submissions || []).some((s) => String(s.trainee) === uid)
+    ).length;
+
+    const presentLms = lmsAttendance.filter((a) => ['present', 'late', 'partial'].includes(a.status)).length;
+    const lmsAttendancePct = lmsAttendance.length
+      ? Math.round((presentLms / lmsAttendance.length) * 100)
+      : 0;
+
+    const presentWs = workshopAttendance.filter((r) =>
+      ['Present', 'Late', 'Partial'].includes(r.attendanceStatus)
+    ).length;
+    const workshopAttendancePct = workshopAttendance.length
+      ? Math.round((presentWs / workshopAttendance.length) * 100)
+      : 0;
+
+    const lessonCompleted = lessonRows.filter((lp) => lp.status === 'completed').length;
+    const lessonTotal = lessonRows.length;
+
+    const courseAvg = courses.length
+      ? Math.round(courses.reduce((sum, c) => sum + (c.progressPercent || 0), 0) / courses.length)
+      : 0;
+    const sessionPct = totalSessions ? Math.round((completedSessions / totalSessions) * 100) : 0;
+    const assignmentPct = totalAssignments
+      ? Math.round((submittedAssignments / totalAssignments) * 100)
+      : 0;
+
+    const parts = [courseAvg, sessionPct, lmsAttendancePct, assignmentPct].filter((p) => p > 0);
+    const overallPercent = parts.length
+      ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length)
+      : (lessonTotal ? Math.round((lessonCompleted / lessonTotal) * 100) : 0);
+
+    return res.json({
+      success: true,
+      progress: {
+        overall: {
+          percent: overallPercent,
+          coursesEnrolled: courses.length,
+          sessionsCompleted: completedSessions,
+          sessionsTotal: totalSessions,
+          assignmentsSubmitted: submittedAssignments,
+          assignmentsTotal: totalAssignments,
+          lessonsCompleted: lessonCompleted,
+          lessonsTotal: lessonTotal,
+        },
+        courses,
+        batches: myBatches.map((b) => ({ _id: b._id, name: b.name, course: b.course })),
+        sessions: {
+          completed: completedSessions,
+          total: totalSessions,
+          percent: sessionPct,
+          recent: lmsSessions
+            .filter((s) => s.status === 'completed')
+            .slice(0, 10)
+            .map((s) => ({ _id: s._id, title: s.title, scheduledAt: s.scheduledAt, status: s.status })),
+        },
+        assignments: {
+          submitted: submittedAssignments,
+          total: totalAssignments,
+          pending: totalAssignments - submittedAssignments,
+          percent: assignmentPct,
+        },
+        attendance: {
+          lms: {
+            present: presentLms,
+            total: lmsAttendance.length,
+            percent: lmsAttendancePct,
+            records: lmsAttendance.slice(0, 20).map((a) => ({
+              status: a.status,
+              joinedAt: a.joinedAt,
+              sessionTitle: a.session?.title,
+              sessionDate: a.session?.scheduledAt,
+            })),
+          },
+          workshop: {
+            present: presentWs,
+            total: workshopAttendance.length,
+            percent: workshopAttendancePct,
+          },
+        },
       },
     });
   } catch (err) {

@@ -38,6 +38,7 @@ const subscriptionRoutes = require('./routes/courseSubscriptionRoutes');
 const livekitWebhook     = require('./routes/livekitWebhook');
 const sessionCtrl        = require('./controllers/sessionController');
 const workshopRoutes     = require('./routes/workshopRoutes');
+const searchRoutes       = require('./routes/searchRoutes');
 const workshopSessionRoutes = require('./routes/workshopSessionRoutes');
 const livekitTokenRoutes = require('./routes/livekit');
 require('./jobs/autoEndSessions');
@@ -119,6 +120,7 @@ app.use('/api/courses',        courseRoutes);
 app.use('/api/courses_subject', subjectContentRoutes);
 app.use('/api/subscriptions',  subscriptionRoutes);
 app.use('/api/workshops',      workshopRoutes);
+app.use('/api/search',         searchRoutes);
 app.use('/api/workshop-sessions', workshopSessionRoutes);
 
 // ── 404 catch-all ─────────────────────────────────────────────────────────────
