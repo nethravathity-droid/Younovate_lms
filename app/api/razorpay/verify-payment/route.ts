@@ -1,15 +1,22 @@
 // ============================================
 // RAZORPAY TEMPORARILY DISABLED
-// Payment integration is not enabled for the
-// current Younovate LMS testing/deployment.
+// Younovate LMS is currently deployed without
+// payment processing.
 // ============================================
 
-import { isRazorpayConfigured, PAYMENT_DISABLED_MESSAGE } from '@/lib/razorpay';
+import { getRazorpay } from '@/lib/razorpay';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  if (!isRazorpayConfigured()) {
+  const razorpay = getRazorpay();
+
+  if (!razorpay) {
     return Response.json(
-      { success: false, message: PAYMENT_DISABLED_MESSAGE },
+      {
+        success: false,
+        message: 'Payment service is currently disabled',
+      },
       { status: 503 }
     );
   }
@@ -21,7 +28,10 @@ export async function POST(req: Request) {
   // return Response.json({ success: true });
 
   return Response.json(
-    { success: false, message: PAYMENT_DISABLED_MESSAGE },
+    {
+      success: false,
+      message: 'Payment service is currently disabled',
+    },
     { status: 503 }
   );
 }

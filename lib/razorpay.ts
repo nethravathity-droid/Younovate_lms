@@ -1,51 +1,31 @@
+import Razorpay from 'razorpay';
+
 // ============================================
 // RAZORPAY TEMPORARILY DISABLED
-// Payment integration is not enabled for the
-// current Younovate LMS testing/deployment.
-// Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET
-// later to enable Razorpay.
+// Younovate LMS is currently deployed without
+// payment processing.
+//
+// To enable later, add:
+// RAZORPAY_KEY_ID
+// RAZORPAY_KEY_SECRET
 // ============================================
 
-import type Razorpay from 'razorpay';
+export function getRazorpay() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
-export const RAZORPAY_ENABLED = false;
-export const PAYMENT_DISABLED_MESSAGE = 'Payment service is currently disabled';
+  if (!keyId || !keySecret) {
+    return null;
+  }
 
-// --- Active Razorpay client (commented — enable when ready) ---
-// import Razorpay from 'razorpay';
-//
+  return new Razorpay({
+    key_id: keyId,
+    key_secret: keySecret,
+  });
+}
+
+// Preserved for future enablement — do not throw at module load.
 // if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
 //   throw new Error('RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set in .env.local');
 // }
-//
-// export const razorpay = new Razorpay({
-//   key_id: process.env.RAZORPAY_KEY_ID,
-//   key_secret: process.env.RAZORPAY_KEY_SECRET,
-// });
-
-export function isRazorpayConfigured(): boolean {
-  return (
-    RAZORPAY_ENABLED &&
-    Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
-  );
-}
-
-let razorpayInstance: Razorpay | null = null;
-
-/** Lazy init — never throws at module load. */
-export function getRazorpayClient(): Razorpay | null {
-  if (!isRazorpayConfigured()) return null;
-  if (razorpayInstance) return razorpayInstance;
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const RazorpayCtor = require('razorpay') as typeof import('razorpay');
-    razorpayInstance = new RazorpayCtor({
-      key_id: process.env.RAZORPAY_KEY_ID!,
-      key_secret: process.env.RAZORPAY_KEY_SECRET!,
-    });
-    return razorpayInstance;
-  } catch {
-    return null;
-  }
-}
+// export const razorpay = new Razorpay({ ... });
