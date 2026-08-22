@@ -30,18 +30,18 @@ const { protect, authorize } = require('../middleware/auth');
 const CourseSubscription     = require('../models/CourseSubscription');
 const Course                 = require('../models/Course');
 const User                   = require('../models/User');
-
-// ── Razorpay — only initialised when keys are present ─────────────────────
-let razorpay = null;
-try {
-  const Razorpay = require('razorpay');
-  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-    razorpay = new Razorpay({
-      key_id:     process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-  }
-} catch (_) { /* razorpay not installed — free/manual flow only */ }
+// ============================================
+// RAZORPAY TEMPORARILY DISABLED
+// Payment integration is not enabled for the
+// current Younovate LMS testing/deployment.
+// Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET
+// later to enable Razorpay.
+// ============================================
+const {
+  isRazorpayConfigured,
+  getRazorpayClient,
+  sendPaymentDisabled,
+} = require('../lib/razorpay');
 
 const router = express.Router();
 
@@ -89,7 +89,10 @@ router.post(
         return fail(res, 'You already have an active subscription to this course');
 
       if (existing.status === 'pending') {
-        // Return the existing pending order so frontend can resume payment
+        // Resume payment only when Razorpay is configured and available
+        if (!isRazorpayConfigured() || !getRazorpayClient())
+          return sendPaymentDisabled(res);
+
         return ok(res, {
           message:        'Pending order already exists — resume payment',
           subscriptionId: existing._id,
@@ -139,9 +142,10 @@ router.post(
       }, 201);
     }
 
-    // ── 4. Paid — create Razorpay order ─────────────────────────────────
+    // ── 4. Paid — create Razorpay order (lazy init on first call) ───────
+    const razorpay = getRazorpayClient();
     if (!razorpay)
-      return fail(res, 'Payment gateway not configured. Contact admin.', 503);
+      return sendPaymentDisabled(res);
 
     const receipt = `sub_${req.user._id.toString().slice(-6)}_${Date.now()}`;
 
@@ -214,6 +218,10 @@ router.post(
 
     if (!sub)
       return fail(res, 'Pending subscription not found. Already verified or does not exist.', 404);
+
+    // Payment verification requires Razorpay to be enabled
+    if (!isRazorpayConfigured() || !getRazorpayClient())
+      return sendPaymentDisabled(res);
 
     // ── 2. Verify Razorpay HMAC signature ───────────────────────────────
     const secret   = process.env.RAZORPAY_KEY_SECRET || '';
