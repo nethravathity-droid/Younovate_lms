@@ -1,0 +1,22 @@
+{
+  "name": "younovate-lms-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "start": "next start",
+    "dev": "next dev"
+  },
+  "dependencies": {
+    "next": "14.2.18",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "razorpay": "^2.9.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.0"
+  }
+}
