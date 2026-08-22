@@ -4,7 +4,7 @@
 // payment processing.
 // ============================================
 
-import { getRazorpay } from '@/lib/razorpay';
+import { getRazorpay, RAZORPAY_DISABLED_MESSAGE } from '@/lib/razorpay';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     return Response.json(
       {
         success: false,
-        message: 'Payment service is currently disabled',
+        message: RAZORPAY_DISABLED_MESSAGE,
       },
       { status: 503 }
     );
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   return Response.json(
     {
       success: false,
-      message: 'Payment service is currently disabled',
+      message: RAZORPAY_DISABLED_MESSAGE,
     },
     { status: 503 }
   );
