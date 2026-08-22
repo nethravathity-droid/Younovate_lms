@@ -23,7 +23,6 @@
 'use strict';
 
 const express  = require('express');
-const crypto   = require('crypto');
 const mongoose = require('mongoose');
 
 const { protect, authorize } = require('../middleware/auth');
@@ -38,8 +37,6 @@ const User                   = require('../models/User');
 // later to enable Razorpay.
 // ============================================
 const {
-  isRazorpayConfigured,
-  getRazorpayClient,
   sendPaymentDisabled,
 } = require('../lib/razorpay');
 
@@ -89,20 +86,25 @@ router.post(
         return fail(res, 'You already have an active subscription to this course');
 
       if (existing.status === 'pending') {
-        // Resume payment only when Razorpay is configured and available
-        if (!isRazorpayConfigured() || !getRazorpayClient())
-          return sendPaymentDisabled(res);
+        // ============================================
+        // RAZORPAY TEMPORARILY DISABLED — resume payment blocked
+        // ============================================
+        return sendPaymentDisabled(res);
 
-        return ok(res, {
-          message:        'Pending order already exists — resume payment',
-          subscriptionId: existing._id,
-          orderId:        existing.payment.razorpayOrderId,
-          amount:         existing.payment.amount,
-          currency:       existing.payment.currency || 'INR',
-          courseName:     course.name,
-          keyId:          process.env.RAZORPAY_KEY_ID || '',
-          resumed:        true,
-        });
+        // --- Enable when Razorpay is active ---
+        // if (!isRazorpayConfigured() || !getRazorpayClient())
+        //   return sendPaymentDisabled(res);
+        //
+        // return ok(res, {
+        //   message:        'Pending order already exists — resume payment',
+        //   subscriptionId: existing._id,
+        //   orderId:        existing.payment.razorpayOrderId,
+        //   amount:         existing.payment.amount,
+        //   currency:       existing.payment.currency || 'INR',
+        //   courseName:     course.name,
+        //   keyId:          process.env.RAZORPAY_KEY_ID || '',
+        //   resumed:        true,
+        // });
       }
 
       // cancelled / failed / expired — allow re-subscribe by deleting old record
@@ -142,49 +144,55 @@ router.post(
       }, 201);
     }
 
-    // ── 4. Paid — create Razorpay order (lazy init on first call) ───────
-    const razorpay = getRazorpayClient();
-    if (!razorpay)
-      return sendPaymentDisabled(res);
+    // ── 4. Paid — Razorpay disabled (no online payment) ─────────────────
+    // ============================================
+    // RAZORPAY TEMPORARILY DISABLED
+    // Paid course checkout is not available until Razorpay is enabled.
+    // ============================================
+    return sendPaymentDisabled(res);
 
-    const receipt = `sub_${req.user._id.toString().slice(-6)}_${Date.now()}`;
-
-    const order = await razorpay.orders.create({
-      amount,
-      currency: 'INR',
-      receipt,
-      notes: {
-        traineeId:  req.user._id.toString(),
-        courseId,
-        courseName: course.name,
-        plan,
-      },
-    });
-
-    // ── 5. Save pending subscription ────────────────────────────────────
-    const sub = await CourseSubscription.create({
-      trainee: req.user._id,
-      course:  courseId,
-      plan,
-      status:  'pending',
-      payment: {
-        amount,
-        currency:        'INR',
-        razorpayOrderId: order.id,
-        gateway:         'razorpay',
-      },
-    });
-
-    return ok(res, {
-      message:        'Order created — open Razorpay checkout to pay',
-      subscriptionId: sub._id,
-      orderId:        order.id,
-      amount,
-      currency:       'INR',
-      courseName:     course.name,
-      courseCode:     course.code,
-      keyId:          process.env.RAZORPAY_KEY_ID,
-    }, 201);
+    // --- Enable when Razorpay is active ---
+    // const razorpay = getRazorpayClient();
+    // if (!razorpay)
+    //   return sendPaymentDisabled(res);
+    //
+    // const receipt = `sub_${req.user._id.toString().slice(-6)}_${Date.now()}`;
+    //
+    // const order = await razorpay.orders.create({
+    //   amount,
+    //   currency: 'INR',
+    //   receipt,
+    //   notes: {
+    //     traineeId:  req.user._id.toString(),
+    //     courseId,
+    //     courseName: course.name,
+    //     plan,
+    //   },
+    // });
+    //
+    // const sub = await CourseSubscription.create({
+    //   trainee: req.user._id,
+    //   course:  courseId,
+    //   plan,
+    //   status:  'pending',
+    //   payment: {
+    //     amount,
+    //     currency:        'INR',
+    //     razorpayOrderId: order.id,
+    //     gateway:         'razorpay',
+    //   },
+    // });
+    //
+    // return ok(res, {
+    //   message:        'Order created — open Razorpay checkout to pay',
+    //   subscriptionId: sub._id,
+    //   orderId:        order.id,
+    //   amount,
+    //   currency:       'INR',
+    //   courseName:     course.name,
+    //   courseCode:     course.code,
+    //   keyId:          process.env.RAZORPAY_KEY_ID,
+    // }, 201);
   })
 );
 
@@ -198,75 +206,76 @@ router.post(
   protect,
   authorize('trainee'),
   asyncH(async (req, res) => {
-    const {
-      subscriptionId,
-      razorpayOrderId,
-      razorpayPaymentId,
-      razorpaySignature,
-    } = req.body;
+    // ============================================
+    // RAZORPAY TEMPORARILY DISABLED — verify payment blocked
+    // ============================================
+    return sendPaymentDisabled(res);
 
-    if (!subscriptionId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature)
-      return fail(res, 'subscriptionId, razorpayOrderId, razorpayPaymentId and razorpaySignature are required');
-
-    if (!validId(subscriptionId))
-      return fail(res, 'Invalid subscriptionId');
-
-    // ── 1. Load pending subscription belonging to this trainee ──────────
-    const sub = await CourseSubscription
-      .findOne({ _id: subscriptionId, trainee: req.user._id, status: 'pending' })
-      .populate('course', 'name code');
-
-    if (!sub)
-      return fail(res, 'Pending subscription not found. Already verified or does not exist.', 404);
-
-    // Payment verification requires Razorpay to be enabled
-    if (!isRazorpayConfigured() || !getRazorpayClient())
-      return sendPaymentDisabled(res);
-
-    // ── 2. Verify Razorpay HMAC signature ───────────────────────────────
-    const secret   = process.env.RAZORPAY_KEY_SECRET || '';
-    const body     = `${razorpayOrderId}|${razorpayPaymentId}`;
-    const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-
-    if (expected !== razorpaySignature) {
-      sub.status                    = 'failed';
-      sub.payment.failureReason     = 'Signature mismatch — possible tamper attempt';
-      sub.payment.razorpayPaymentId = razorpayPaymentId;
-      await sub.save();
-      return fail(res, 'Payment verification failed — signature mismatch. Contact support.', 400);
-    }
-
-    // ── 3. Activate ─────────────────────────────────────────────────────
-    sub.status                    = 'active';
-    sub.startDate                 = new Date();
-    sub.payment.razorpayPaymentId = razorpayPaymentId;
-    sub.payment.razorpaySignature = razorpaySignature;
-    sub.payment.paidAt            = new Date();
-
-    // Monthly plan → expires after 30 days
-    if (sub.plan === 'monthly') {
-      const end = new Date();
-      end.setDate(end.getDate() + 30);
-      sub.endDate = end;
-    }
-
-    await sub.save();
-
-    return ok(res, {
-      message: 'Payment verified. Course access is now active!',
-      subscription: {
-        _id:       sub._id,
-        course:    { _id: sub.course._id, name: sub.course.name, code: sub.course.code },
-        plan:      sub.plan,
-        status:    sub.status,
-        startDate: sub.startDate,
-        endDate:   sub.endDate,
-        isActive:  sub.isActive,
-        paidAt:    sub.payment.paidAt,
-        amount:    sub.payment.amount,
-        currency:  sub.payment.currency,
-      },
-    });
+    // --- Enable when Razorpay is active ---
+    // const {
+    //   subscriptionId,
+    //   razorpayOrderId,
+    //   razorpayPaymentId,
+    //   razorpaySignature,
+    // } = req.body;
+    //
+    // if (!subscriptionId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature)
+    //   return fail(res, 'subscriptionId, razorpayOrderId, razorpayPaymentId and razorpaySignature are required');
+    //
+    // if (!validId(subscriptionId))
+    //   return fail(res, 'Invalid subscriptionId');
+    //
+    // const sub = await CourseSubscription
+    //   .findOne({ _id: subscriptionId, trainee: req.user._id, status: 'pending' })
+    //   .populate('course', 'name code');
+    //
+    // if (!sub)
+    //   return fail(res, 'Pending subscription not found. Already verified or does not exist.', 404);
+    //
+    // if (!isRazorpayConfigured() || !getRazorpayClient())
+    //   return sendPaymentDisabled(res);
+    //
+    // const secret   = process.env.RAZORPAY_KEY_SECRET || '';
+    // const body     = `${razorpayOrderId}|${razorpayPaymentId}`;
+    // const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
+    //
+    // if (expected !== razorpaySignature) {
+    //   sub.status                    = 'failed';
+    //   sub.payment.failureReason     = 'Signature mismatch — possible tamper attempt';
+    //   sub.payment.razorpayPaymentId = razorpayPaymentId;
+    //   await sub.save();
+    //   return fail(res, 'Payment verification failed — signature mismatch. Contact support.', 400);
+    // }
+    //
+    // sub.status                    = 'active';
+    // sub.startDate                 = new Date();
+    // sub.payment.razorpayPaymentId = razorpayPaymentId;
+    // sub.payment.razorpaySignature = razorpaySignature;
+    // sub.payment.paidAt            = new Date();
+    //
+    // if (sub.plan === 'monthly') {
+    //   const end = new Date();
+    //   end.setDate(end.getDate() + 30);
+    //   sub.endDate = end;
+    // }
+    //
+    // await sub.save();
+    //
+    // return ok(res, {
+    //   message: 'Payment verified. Course access is now active!',
+    //   subscription: {
+    //     _id:       sub._id,
+    //     course:    { _id: sub.course._id, name: sub.course.name, code: sub.course.code },
+    //     plan:      sub.plan,
+    //     status:    sub.status,
+    //     startDate: sub.startDate,
+    //     endDate:   sub.endDate,
+    //     isActive:  sub.isActive,
+    //     paidAt:    sub.payment.paidAt,
+    //     amount:    sub.payment.amount,
+    //     currency:  sub.payment.currency,
+    //   },
+    // });
   })
 );
 

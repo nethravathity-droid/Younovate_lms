@@ -7,46 +7,51 @@
 // ============================================
 'use strict';
 
+// Set to true when company is ready to enable online payments.
+const RAZORPAY_ENABLED = false;
+
 const PAYMENT_DISABLED_MESSAGE = 'Payment service is currently disabled';
 
-let razorpayInstance = null;
-let initAttempted = false;
+// ── Active Razorpay client code (commented — enable when ready) ─────────────
+// let razorpayInstance = null;
+// let initAttempted = false;
+//
+// function isRazorpayConfigured() {
+//   return Boolean(
+//     process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
+//   );
+// }
+//
+// function getRazorpayClient() {
+//   if (!RAZORPAY_ENABLED || !isRazorpayConfigured()) return null;
+//   if (razorpayInstance) return razorpayInstance;
+//   if (initAttempted) return null;
+//
+//   initAttempted = true;
+//   try {
+//     const Razorpay = require('razorpay');
+//     razorpayInstance = new Razorpay({
+//       key_id:     process.env.RAZORPAY_KEY_ID,
+//       key_secret: process.env.RAZORPAY_KEY_SECRET,
+//     });
+//     return razorpayInstance;
+//   } catch (_) {
+//     return null;
+//   }
+// }
 
-/**
- * Returns true only when both Razorpay env vars are present.
- * Safe to call at any time — never throws.
- */
+/** Always false while RAZORPAY_ENABLED is false. */
 function isRazorpayConfigured() {
-  return Boolean(
+  return RAZORPAY_ENABLED && Boolean(
     process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
   );
 }
 
-/**
- * Lazy Razorpay client — initialized on first paid API call only.
- * Returns null when keys are missing or the razorpay package is not installed.
- */
+/** Always null while Razorpay is disabled. */
 function getRazorpayClient() {
-  if (!isRazorpayConfigured()) return null;
-  if (razorpayInstance) return razorpayInstance;
-  if (initAttempted) return null;
-
-  initAttempted = true;
-  try {
-    const Razorpay = require('razorpay');
-    razorpayInstance = new Razorpay({
-      key_id:     process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-    return razorpayInstance;
-  } catch (_) {
-    return null;
-  }
+  return null;
 }
 
-/**
- * Standard JSON response when payment APIs are called while Razorpay is off.
- */
 function sendPaymentDisabled(res) {
   return res.status(503).json({
     success: false,
@@ -55,6 +60,7 @@ function sendPaymentDisabled(res) {
 }
 
 module.exports = {
+  RAZORPAY_ENABLED,
   isRazorpayConfigured,
   getRazorpayClient,
   sendPaymentDisabled,
